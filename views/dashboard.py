@@ -342,31 +342,28 @@ else:
     }
 
     # 3. 요일별(시간대) 평균 통행량
-    # 3. 요일별 평균 통행량 쿼리
     qr2 = """
         SELECT 
-            (CASE WHEN rca.collect_day = 'Mon' THEN '월' 
-                  WHEN rca.collect_day = 'Tue' THEN '화' 
-                  WHEN rca.collect_day = 'Wed' THEN '수' 
-                  WHEN rca.collect_day = 'Thu' THEN '목' 
-                  WHEN rca.collect_day = 'Fri' THEN '금' 
-                  WHEN rca.collect_day = 'Sat' THEN '토' 
-                  WHEN rca.collect_day = 'Sun' THEN '일' END) as collect_day,
-            (CASE WHEN rca.collect_day = 'Mon' THEN 1 
-                  WHEN rca.collect_day = 'Tue' THEN 2 
-                  WHEN rca.collect_day = 'Wed' THEN 3 
-                  WHEN rca.collect_day = 'Thu' THEN 4 
-                  WHEN rca.collect_day = 'Fri' THEN 5 
-                  WHEN rca.collect_day = 'Sat' THEN 6 
-                  WHEN rca.collect_day = 'Sun' THEN 7 END) as collect_order,
+            (CASE WEEKDAY(t1.collect_date)
+                WHEN 0 THEN '월'
+                WHEN 1 THEN '화'
+                WHEN 2 THEN '수'
+                WHEN 3 THEN '목'
+                WHEN 4 THEN '금'
+                WHEN 5 THEN '토'
+                WHEN 6 THEN '일'
+             END) as collect_day,
+            WEEKDAY(t1.collect_date) as collect_order,
             ROUND(AVG(t1.daily_cnt)) as cnt
         FROM (
-            SELECT rca.collect_day, rca.collect_date, SUM(rca.collect_cnt) as daily_cnt
+            SELECT 
+                rca.collect_date, 
+                SUM(rca.collect_cnt) as daily_cnt
             FROM rt_collect_all rca
             WHERE rca.user_id = '{id}' 
               AND rca.work_no = {re}
               AND rca.del_yn = 0
-            GROUP BY rca.collect_day, rca.collect_date
+            GROUP BY rca.collect_date
         ) t1
         GROUP BY collect_day, collect_order
         ORDER BY collect_order
