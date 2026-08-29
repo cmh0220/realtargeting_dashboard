@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit_echarts import st_echarts
 
 # # Realtargeting 로고
 st.logo("images/logo_wide.png", size="large", link="https://realtargeting.streamlit.app", icon_image="images/단순창발효관광재단 로고.png")
@@ -63,7 +64,7 @@ else:
 
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("😊누적 통행량", str(format(round(int(df_h1.iloc[0,0]),0), ',')) + "명", "1,200 명")
+    col1.metric("전체 누적 통행량", str(format(round(int(df_h1.iloc[0,0]),0), ',')) + "명", "1,200 명")
     col2.metric("일평균 통행량", str(format(round(int(df_h2.iloc[0,0]),0), ',')) + "명", "1,200 명")
     col3.metric("시간당 통행량", str(format(round(int(df_h3.iloc[0,0]),0), ',')) + "명", "1,200 명")
     col4.metric("분당 통행량", str(format(round(int(df_h4.iloc[0,0]),0), ',')) + "명", "-1,200 명")
@@ -220,6 +221,7 @@ else:
     ##########################################
     # c3
     ##########################################
+
     c3.write("😊연령별 통행량")
     c3.write(" ")
 
@@ -239,16 +241,49 @@ else:
                  where rca.user_id = '{id}'
                    and rca.work_no = {re}
                    and (rca.class like 'm%' OR rca.class like 'w%')
+                   and rca.del_yn = 0
                   group by substring(rca.class, 2, 2)
                 union all
                 select age, cnt
                 from rt_dummy_age) t1
             group by t1.age
+            order by age_order
     """
 
-
     df23 = conn.query(qr23.format(**variables1), ttl=600)
-    c3.bar_chart(df23, x="age", y='cnt', x_label='연령별', y_label='통행량', height=300)
+
+    # 1. 데이터프레임을 ECharts가 요구하는 [{"name": ..., "value": ...}] 형태의 리스트로 변환
+    chart_data = [
+        {"name": row["age"], "value": int(row["cnt"])}
+        for _, row in df23.iterrows()
+    ]
+
+    # 2. ECharts 옵션 작성 (제공해주신 옵션 구조 활용)
+    options = {
+        "tooltip": {
+            "trigger": "item",
+            "formatter": "{b}: {c} ({d}%)"  # 마우스 올렸을 때 [이름: 값 (비율%)] 표시
+        },
+        "legend": {
+            "top": "5%",
+            "left": "center"
+        },
+        "series": [
+            {
+                "name": "연령별 통행량",
+                "type": "pie",
+                "radius": ["40%", "70%"],
+                "center": ["50%", "70%"],
+                "startAngle": 180,
+                "endAngle": 360,
+                "data": chart_data,  # 변환한 데이터 주입
+            }
+        ],
+    }
+
+    # 3. Streamlit에 ECharts 출력 (반원 형태이므로 높이를 300px~350px로 조정하면 여백이 적당합니다)
+    with c3:
+        st_echarts(options=options, height="320px")
 
     ##########################################
     # c4
