@@ -1,22 +1,27 @@
 import streamlit as st
 import datetime
+
 # # Realtargeting 로고
-st.logo("images/logo_wide.png", size="large", link="https://realtargeting.streamlit.app", icon_image="images/단순창발효관광재단 로고.png",)
+st.logo("images/logo_wide.png", size="large", link="https://realtargeting.streamlit.app")
 
 conn = st.connection("mysql", type='sql')
 
 st.subheader("일일 모니터링", divider="blue")
 st.write(" ")
 
-if st.session_state['id'] == None or st.session_state['re'] == None:
+# session_state에 키가 없거나 값이 None/빈값인 경우를 안전하게 체크
+user_id = st.session_state.get("id") or st.session_state.get("user_id")
+user_re = st.session_state.get("re") or st.session_state.get("user_re")
+
+if not user_id or not user_re:
     st.write("⚠️아이디 및 등록번호를 확인하세요.")
-    st.toast("⚠️아이디 및 등록번호를 확인하세요.")
+    # st.toast("⚠️아이디 및 등록번호를 확인하세요.")
 else:
     d = st.date_input("📆조회일자를 선택하세요.", "today", datetime.date(2024, 7, 1))
     st.write(" ")
 
     # ------------------------------- 쿼리 1
-    st.write("😊시간대별 통행량")
+    st.write("시간대별 통행량")
     st.write(" ")
     qr1 = """
         select tt1.collect_hour, sum(tt1.cnt) as cnt
@@ -44,7 +49,7 @@ else:
     left, right = st.columns([0.3, 0.7], gap="small", vertical_alignment="bottom")
 
     # ------------------------------- 쿼리 2-1
-    left.write("😊성별 통행량")
+    left.write("성별 통행량")
     left.write(" ")
     qr21 = """
             select (CASE WHEN substring(rca.class,1,1) = 'm' THEN '남성'
@@ -62,7 +67,7 @@ else:
 
     # ------------------------------- 쿼리 2-2
 
-    right.write("😊시간대별 통행량")
+    right.write("시간대별 통행량")
     right.write(" ")
 
     qr22 = """
@@ -89,7 +94,7 @@ else:
     left2, right2 = st.columns([0.3, 0.7], gap="small", vertical_alignment="bottom")
 
     # ------------------------------- 쿼리 3-1
-    left2.write("👨‍👩‍👧‍👦연령별 통행량")
+    left2.write("‍연령별 통행량")
     left2.write(" ")
     qr31 = """
             select (CASE WHEN t1.age = '01' THEN '10대 이하'
@@ -118,7 +123,7 @@ else:
     left2.bar_chart(df31, x="age", y='cnt', x_label='연령대', y_label='통행량')
 
     # ------------------------------- 쿼리 3-2
-    right2.write("👨‍👩‍👧시간대별 통행량")
+    right2.write("시간대별 통행량")
     right2.write(" ")
 
     qr32 = """

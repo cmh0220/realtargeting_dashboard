@@ -226,7 +226,7 @@ conn = st.connection("mysql", type="sql")
 
 if st.session_state.get("id") is None or st.session_state.get("re") is None:
     st.write("⚠️아이디 및 등록번호를 확인하세요.")
-    st.toast("⚠️아이디 및 등록번호를 확인하세요.")
+    # st.toast("⚠️아이디 및 등록번호를 확인하세요.")
 else:
     variables1 = {"id": st.session_state["id"], "re": st.session_state["re"]}
 

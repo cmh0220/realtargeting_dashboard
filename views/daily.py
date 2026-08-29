@@ -1,7 +1,7 @@
 import streamlit as st
 
 # # Realtargeting 로고
-st.logo("images/logo_wide.png", size="large", link="https://realtargeting.streamlit.app", icon_image="images/단순창발효관광재단 로고.png")
+st.logo("images/logo_wide.png", size="large", link="https://realtargeting.streamlit.app")
 
 
 
