@@ -61,12 +61,12 @@ def myclear():
 
 
 # 회원정보 등록 (사이드바)
+# 회원정보 등록 (사이드바)
 with st.sidebar:
     st.subheader("🔑 사용자 인증")
 
-    # st.form을 사용하여 엔터키(Enter) 입력 시 자동으로 submit 처리
+    # 1. 입력 및 적용 폼 (엔터키 입력 시 자동 Submit)
     with st.form(key="login_form", clear_on_submit=False):
-        # 기존 저장값이 있으면 default 값으로 세팅
         default_id = st.session_state.get("user_id", "")
         default_re = st.session_state.get("user_re", None)
 
@@ -85,15 +85,13 @@ with st.sidebar:
             key="input_re_val",
         )
 
-        left, right = st.columns(2, gap="small", vertical_alignment="bottom")
-
-        # Form 내부의 submit_button은 엔터키를 누르면 자동 실행됩니다.
-        submitted = left.form_submit_button(
+        # Form 내부에는 submit_button만 배치 (엔터키 동작)
+        submit_btn = st.form_submit_button(
             "적용", on_click=handle_submit, use_container_width=True
         )
 
-    # 취소/초기화 버튼은 Form 외부에 두어 독립 동작하도록 설정
-    right.button("취소", on_click=myclear, use_container_width=True)
+    # 2. 취소(초기화) 버튼은 Form '외부'에 독립 배치
+    st.button("취소/초기화", on_click=myclear, use_container_width=True)
 
 # 페이지 실행
 pg.run()
