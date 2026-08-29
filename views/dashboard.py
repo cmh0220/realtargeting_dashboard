@@ -137,37 +137,58 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
         st_echarts(options=options, height="300px", key=f"echarts_gender_{chart_id}")
 
-    elif chart_type == "echarts_area_day":
-        # 데이터프레임에서 요일 목록과 통행량 추출
-        x_data = df["collect_day"].tolist()
-        y_data = df["cnt"].tolist()
+    elif chart_type == "echarts_multi_line_day_hour":
+        # 1. 쿼리 결과(df)를 시간대(행) x 요일(열) 형태의 피벗 테이블로 변환
+        # collect_order 순서(월~일)를 유지하기 위해 정렬 보장
+        pivot_df = df.pivot(index="collect_hour", columns="collect_day", values="cnt").fillna(0)
 
-        options = {
+        # 요일 순서 고정 (월, 화, 수, 목, 금, 토, 일)
+        days_order = ['월', '화', '수', '목', '금', '토', '일']
+        existing_days = [day for day in days_order if day in pivot_df.columns]
+
+        # 2. X축(시간대 00~23) 및 시리즈 데이터 구성
+        x_data = [f"{int(h):02d}시" for h in pivot_df.index]
+
+        series_list = []
+        for day in existing_days:
+            series_list.append({
+                "name": day,
+                "type": "line",
+                "smooth": True,
+                "data": pivot_df[day].round(1).tolist(),
+            })
+
+        # 3. ECharts 옵션 작성
+        option = {
             "tooltip": {
                 "trigger": "axis",
-                "formatter": "{b}요일: {c}명",
+                "axisPointer": {"type": "cross"},
+            },
+            "legend": {
+                "top": "0%",
+                "data": existing_days,
+            },
+            "grid": {
+                "top": "15%",
+                "left": "3%",
+                "right": "4%",
+                "bottom": "3%",
+                "containLabel": True,
             },
             "xAxis": {
                 "type": "category",
                 "boundaryGap": False,
                 "data": x_data,
             },
-            "yAxis": {"type": "value"},
-            "series": [
-                {
-                    "data": y_data,
-                    "type": "line",
-                    "smooth": True,
-                    "areaStyle": {},
-                }
-            ],
+            "yAxis": {
+                "type": "value",
+                "name": "통행량",
+            },
+            "series": series_list,
         }
 
-        st_echarts(
-            options=options,
-            height="300px",  # 대시보드 그리드에 맞추어 300px 지정 (필요시 500px로 변경)
-            key=f"echarts_area_day_{chart_id}"
-        )
+        st_echarts(options=option, height="400px", key=f"echarts_day_hour_{chart_id}")
+
 
 def render_chart_grid(
     charts: List[Dict[str, Any]],
@@ -343,36 +364,19 @@ else:
 
     # 3. 요일별(시간대) 평균 통행량
     qr2 = """
-        SELECT 
-            (CASE WEEKDAY(t1.collect_date)
-                WHEN 0 THEN '월'
-                WHEN 1 THEN '화'
-                WHEN 2 THEN '수'
-                WHEN 3 THEN '목'
-                WHEN 4 THEN '금'
-                WHEN 5 THEN '토'
-                WHEN 6 THEN '일'
-             END) as collect_day,
-            WEEKDAY(t1.collect_date) as collect_order,
-            ROUND(AVG(t1.daily_cnt)) as cnt
-        FROM (
+        SELECT t1.collect_hour, t1.collect_day, t1.collect_order, avg(t1.cnt) as cnt FROM (
             SELECT 
-                rca.collect_date, 
-                SUM(rca.collect_cnt) as daily_cnt
-            FROM rt_collect_all rca
-            WHERE rca.user_id = '{id}' 
-              AND rca.work_no = {re}
-              AND rca.del_yn = 0
-            GROUP BY rca.collect_date
-        ) t1
-        GROUP BY collect_day, collect_order
-        ORDER BY collect_order
+                (CASE WHEN rca.collect_day = 'Sun' THEN '일' WHEN rca.collect_day = 'Mon' THEN '월' WHEN rca.collect_day = 'Tue' THEN '화' WHEN rca.collect_day = 'Wed' THEN '수' WHEN rca.collect_day = 'Thu' THEN '목' WHEN rca.collect_day = 'Fri' THEN '금' WHEN rca.collect_day = 'Sat' THEN '토' END) as collect_day,
+                (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order,
+                rca.collect_hour as collect_hour, rca.collect_date as collect_date, sum(rca.collect_cnt) as cnt
+            FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re}
+            GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date
+        ) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order
     """
-
     chart_day_hour = {
-        "chart_id": "day_avg_area",
-        "title": "요일별 평균 통행량",
-        "type": "echarts_area_day",
+        "chart_id": "day_hour_multi",
+        "title": "요일별/시간대별 평균 통행량",
+        "type": "echarts_multi_line_day_hour",
         "df": conn.query(qr2.format(**variables1), ttl=600),
     }
 
