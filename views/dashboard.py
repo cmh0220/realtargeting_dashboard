@@ -137,6 +137,37 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
         st_echarts(options=options, height="300px", key=f"echarts_gender_{chart_id}")
 
+    elif chart_type == "echarts_area_day":
+        # 데이터프레임에서 요일 목록과 통행량 추출
+        x_data = df["collect_day"].tolist()
+        y_data = df["cnt"].tolist()
+
+        options = {
+            "tooltip": {
+                "trigger": "axis",
+                "formatter": "{b}요일: {c}명",
+            },
+            "xAxis": {
+                "type": "category",
+                "boundaryGap": False,
+                "data": x_data,
+            },
+            "yAxis": {"type": "value"},
+            "series": [
+                {
+                    "data": y_data,
+                    "type": "line",
+                    "smooth": True,
+                    "areaStyle": {},
+                }
+            ],
+        }
+
+        st_echarts(
+            options=options,
+            height="300px",  # 대시보드 그리드에 맞추어 300px 지정 (필요시 500px로 변경)
+            key=f"echarts_area_day_{chart_id}"
+        )
 
 def render_chart_grid(
     charts: List[Dict[str, Any]],
@@ -311,26 +342,41 @@ else:
     }
 
     # 3. 요일별(시간대) 평균 통행량
+    # 3. 요일별 평균 통행량 쿼리
     qr2 = """
-        SELECT t1.collect_hour, t1.collect_day, t1.collect_order, avg(t1.cnt) as cnt FROM (
-            SELECT 
-                (CASE WHEN rca.collect_day = 'Sun' THEN '일' WHEN rca.collect_day = 'Mon' THEN '월' WHEN rca.collect_day = 'Tue' THEN '화' WHEN rca.collect_day = 'Wed' THEN '수' WHEN rca.collect_day = 'Thu' THEN '목' WHEN rca.collect_day = 'Fri' THEN '금' WHEN rca.collect_day = 'Sat' THEN '토' END) as collect_day,
-                (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order,
-                rca.collect_hour as collect_hour, rca.collect_date as collect_date, sum(rca.collect_cnt) as cnt
-            FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re}
-            GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date
-        ) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order
+        SELECT 
+            (CASE WHEN rca.collect_day = 'Mon' THEN '월' 
+                  WHEN rca.collect_day = 'Tue' THEN '화' 
+                  WHEN rca.collect_day = 'Wed' THEN '수' 
+                  WHEN rca.collect_day = 'Thu' THEN '목' 
+                  WHEN rca.collect_day = 'Fri' THEN '금' 
+                  WHEN rca.collect_day = 'Sat' THEN '토' 
+                  WHEN rca.collect_day = 'Sun' THEN '일' END) as collect_day,
+            (CASE WHEN rca.collect_day = 'Mon' THEN 1 
+                  WHEN rca.collect_day = 'Tue' THEN 2 
+                  WHEN rca.collect_day = 'Wed' THEN 3 
+                  WHEN rca.collect_day = 'Thu' THEN 4 
+                  WHEN rca.collect_day = 'Fri' THEN 5 
+                  WHEN rca.collect_day = 'Sat' THEN 6 
+                  WHEN rca.collect_day = 'Sun' THEN 7 END) as collect_order,
+            ROUND(AVG(t1.daily_cnt)) as cnt
+        FROM (
+            SELECT rca.collect_day, rca.collect_date, SUM(rca.collect_cnt) as daily_cnt
+            FROM rt_collect_all rca
+            WHERE rca.user_id = '{id}' 
+              AND rca.work_no = {re}
+              AND rca.del_yn = 0
+            GROUP BY rca.collect_day, rca.collect_date
+        ) t1
+        GROUP BY collect_day, collect_order
+        ORDER BY collect_order
     """
+
     chart_day_hour = {
-        "chart_id": "day_hour",
-        "title": "요일별(시간대) 평균 통행량",
-        "type": "area",
+        "chart_id": "day_avg_area",
+        "title": "요일별 평균 통행량",
+        "type": "echarts_area_day",
         "df": conn.query(qr2.format(**variables1), ttl=600),
-        "x": "collect_hour",
-        "y": "cnt",
-        "color": "collect_day",
-        "x_label": "요일",
-        "y_label": "통행량",
     }
 
     # 4. 성별 통행량
