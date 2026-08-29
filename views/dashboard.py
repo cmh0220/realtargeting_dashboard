@@ -33,7 +33,11 @@ def render_chart_item(chart_info: Dict[str, Any]):
     # 고유 key 생성을 위한 chart_id 식별자 추출
     chart_id = chart_info.get("chart_id", "default_chart")
 
-    st.write(f"😊{title}")
+    # 20px 굵은 글씨 스타일 적용
+    st.markdown(
+        f"<h4 style='font-size: 20px; font-weight: bold; margin-bottom: 10px;'>{title}</h4>",
+        unsafe_allow_html=True,
+    )
     st.write(" ")
 
     if chart_type == "bar":
@@ -100,6 +104,7 @@ def render_chart_item(chart_info: Dict[str, Any]):
                 {
                     "data": y_data,
                     "type": "line",
+                    "areaStyle": {},
                 }
             ],
         }
