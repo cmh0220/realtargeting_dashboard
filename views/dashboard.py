@@ -71,7 +71,7 @@ def render_chart_item(chart_info: Dict[str, Any]):
                 "trigger": "item",
                 "formatter": "{b}: {c} ({d}%)",
             },
-            "legend": {"bottom": "5%", "left": "center"},
+            "legend": {"top": "5%", "left": "center"},
             "series": [
                 {
                     "name": title,
@@ -85,6 +85,34 @@ def render_chart_item(chart_info: Dict[str, Any]):
             ],
         }
         st_echarts(options=options, height="300px")
+
+    elif chart_type == "echarts_line":
+        # 지정된 X축/Y축 컬럼 읽기
+        x_col = chart_info.get("x_col", "collect_hour")
+        y_col = chart_info.get("y_col", "cnt")
+
+        x_data = df[x_col].astype(str).tolist()
+        y_data = df[y_col].tolist()
+
+        # 제시해주신 ECharts 라인차트 옵션 적용
+        option = {
+            "tooltip": {"trigger": "axis"},  # 마우스 오버시 가이드라인 및 값 표시
+            "xAxis": {
+                "type": "category",
+                "data": x_data,
+            },
+            "yAxis": {"type": "value"},
+            "series": [
+                {
+                    "data": y_data,
+                    "type": "line",
+                    "smooth": True,  # 곡선 스타일 원할 경우 True (선택)
+                }
+            ],
+        }
+
+        # 대시보드 높이에 맞추어 300px로 설정
+        st_echarts(options=option, height="300px")
 
     elif chart_type == "echarts_pie_gender":
         # 데이터프레임 컬럼명 유연하게 매핑 (기본값: age / cnt)
@@ -202,19 +230,16 @@ else:
             SELECT t1.collect_hour, round(avg(t1.cnt)) as cnt FROM (
                 SELECT rca.collect_hour as collect_hour, rca.collect_date as collect_date, sum(rca.collect_cnt) as cnt   
                 FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} GROUP BY rca.collect_hour, rca.collect_date
-            ) t1 GROUP BY t1.collect_hour
-            UNION ALL 
-            SELECT d.collect_hour, d.cnt FROM rt_dummy_hour d
+            ) t1 GROUP BY t1.collect_hour            
         ) tt1 GROUP BY tt1.collect_hour ORDER BY tt1.collect_hour
     """
+
     chart_hour = {
         "title": "시간대별 통행량",
-        "type": "area",
+        "type": "echarts_line",
         "df": conn.query(qr3.format(**variables1), ttl=600),
-        "x": "collect_hour",
-        "y": "cnt",
-        "x_label": "시간",
-        "y_label": "통행량",
+        "x_col": "collect_hour",  # X축 데이터 컬럼명
+        "y_col": "cnt",  # Y축 데이터 컬럼명
     }
 
     # 3. 요일별(시간대) 평균 통행량
