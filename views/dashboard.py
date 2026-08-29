@@ -100,7 +100,6 @@ def render_chart_item(chart_info: Dict[str, Any]):
                 {
                     "data": y_data,
                     "type": "line",
-                    "smooth": True,
                 }
             ],
         }
@@ -154,7 +153,6 @@ def render_chart_item(chart_info: Dict[str, Any]):
             series_list.append({
                 "name": day,
                 "type": "line",
-                "smooth": True,
                 "data": pivot_df[day].round(1).tolist(),
             })
 
