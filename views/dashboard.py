@@ -30,6 +30,8 @@ def render_chart_item(chart_info: Dict[str, Any]):
     title = chart_info.get("title", "")
     chart_type = chart_info.get("type", "bar")
     df = chart_info.get("df")
+    # 고유 key 생성을 위한 chart_id 식별자 추출
+    chart_id = chart_info.get("chart_id", "default_chart")
 
     st.write(f"😊{title}")
     st.write(" ")
@@ -77,7 +79,7 @@ def render_chart_item(chart_info: Dict[str, Any]):
                 }
             ],
         }
-        st_echarts(options=options, height="300px")
+        st_echarts(options=options, height="300px", key=f"echarts_pie_{chart_id}")
 
     elif chart_type == "echarts_line":
         # 지정된 X축/Y축 컬럼 읽기
@@ -87,9 +89,8 @@ def render_chart_item(chart_info: Dict[str, Any]):
         x_data = df[x_col].astype(str).tolist()
         y_data = df[y_col].tolist()
 
-        # 제시해주신 ECharts 라인차트 옵션 적용
         option = {
-            "tooltip": {"trigger": "axis"},  # 마우스 오버시 가이드라인 및 값 표시
+            "tooltip": {"trigger": "axis"},
             "xAxis": {
                 "type": "category",
                 "data": x_data,
@@ -99,16 +100,14 @@ def render_chart_item(chart_info: Dict[str, Any]):
                 {
                     "data": y_data,
                     "type": "line",
-                    "smooth": True,  # 곡선 스타일 원할 경우 True (선택)
+                    "smooth": True,
                 }
             ],
         }
 
-        # 대시보드 높이에 맞추어 300px로 설정
-        st_echarts(options=option, height="300px")
+        st_echarts(options=option, height="300px", key=f"echarts_line_{chart_id}")
 
     elif chart_type == "echarts_pie_gender":
-        # 데이터프레임 컬럼명 유연하게 매핑 (기본값: age / cnt)
         name_col = chart_info.get("name_col", "age")
         val_col = chart_info.get("value_col", "cnt")
 
@@ -117,7 +116,6 @@ def render_chart_item(chart_info: Dict[str, Any]):
             for _, row in df.iterrows()
         ]
 
-        # 제시해주신 ECharts 예제 옵션 적용
         options = {
             "tooltip": {
                 "trigger": "item",
@@ -137,8 +135,7 @@ def render_chart_item(chart_info: Dict[str, Any]):
             ],
         }
 
-        # 반원 차트 형태에 맞춰 높이를 조정하여 출력
-        st_echarts(options=options, height="300px")
+        st_echarts(options=options, height="300px", key=f"echarts_gender_{chart_id}")
 
 
 def render_chart_grid(
@@ -150,7 +147,6 @@ def render_chart_grid(
     for i in range(0, len(charts), cols_per_row):
         row_charts = charts[i : i + cols_per_row]
 
-        # 비율 지정이 있으면 사용하고, 없으면 균등 분hal
         if ratios and len(ratios) == len(row_charts):
             cols = st.columns(ratios, vertical_alignment="bottom")
         else:
@@ -165,12 +161,10 @@ def render_chart_grid(
 # 2. 메인 페이지 로직
 # ------------------------------------------------------------------------------
 
-# 로고 설정
 st.logo(
     "images/logo_wide.png",
     size="large",
     link="https://realtargeting.streamlit.app",
-    # icon_image="images/단순창발효관광재단 로고.png",
 )
 
 conn = st.connection("mysql", type="sql")
@@ -189,7 +183,6 @@ else:
     qr_h3 = "SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"
     qr_h4 = "SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"
 
-    # qr_h5: 주중 평균 통행량
     qr_h5 = """
     SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekday_avg
       FROM (
@@ -206,7 +199,6 @@ else:
       ) t1
     """
 
-    # qr_h6: 주말 평균 통행량
     qr_h6 = """
     SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekend_avg
       FROM (
@@ -234,7 +226,7 @@ else:
     st.write(" ")
 
     # --------------------------------------------------------------------------
-    # B. 데이터 조회 및 차트 메타데이터 정의
+    # B. 데이터 조회 및 차트 메타데이터 정의 (chart_id 필수 부여)
     # --------------------------------------------------------------------------
 
     # 1. 날짜별 통행량
@@ -244,6 +236,7 @@ else:
         GROUP BY DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') ORDER BY MIN(STR_TO_DATE(rca.collect_date, '%Y%m%d'));
     """
     chart_date = {
+        "chart_id": "date_traffic",
         "title": "날짜별 통행량",
         "type": "bar",
         "df": conn.query(qr1.format(**variables1), ttl=600),
@@ -253,7 +246,7 @@ else:
         "y_label": "통행량",
     }
 
-    # 2. 시간대별 통행량
+    # 2. 시간대별 통행량 (주중)
     qr3 = """
         SELECT tt1.collect_hour, SUM(tt1.cnt) AS cnt 
         FROM (
@@ -277,43 +270,45 @@ else:
     """
 
     chart_hour_weekday = {
+        "chart_id": "hour_weekday",
         "title": "시간대별 통행량(주중)",
         "type": "echarts_line",
         "df": conn.query(qr3.format(**variables1), ttl=600),
-        "x_col": "collect_hour",  # X축 데이터 컬럼명
-        "y_col": "cnt",  # Y축 데이터 컬럼명
+        "x_col": "collect_hour",
+        "y_col": "cnt",
     }
 
+    # 2-2. 시간대별 통행량 (주말)
     qr3_2 = """
-            SELECT tt1.collect_hour, SUM(tt1.cnt) AS cnt 
+        SELECT tt1.collect_hour, SUM(tt1.cnt) AS cnt 
+        FROM (
+            SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
             FROM (
-                SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
-                FROM (
-                    SELECT rca.collect_hour AS collect_hour, 
-                           rca.collect_date AS collect_date, 
-                           SUM(rca.collect_cnt) AS cnt   
-                    FROM rt_collect_all rca 
-                    JOIN rt_calendar c ON rca.collect_date = c.dt
-                    WHERE rca.user_id = '{id}' 
-                      AND rca.work_no = {re} 
-                      AND rca.del_yn = 0 
-                      AND c.anal_gubun = 'Weekend'
-                    GROUP BY rca.collect_hour, rca.collect_date
-                ) t1 
-                GROUP BY t1.collect_hour            
-            ) tt1 
-            GROUP BY tt1.collect_hour 
-            ORDER BY tt1.collect_hour
-        """
+                SELECT rca.collect_hour AS collect_hour, 
+                       rca.collect_date AS collect_date, 
+                       SUM(rca.collect_cnt) AS cnt   
+                FROM rt_collect_all rca 
+                JOIN rt_calendar c ON rca.collect_date = c.dt
+                WHERE rca.user_id = '{id}' 
+                  AND rca.work_no = {re} 
+                  AND rca.del_yn = 0 
+                  AND c.anal_gubun = 'Weekend'
+                GROUP BY rca.collect_hour, rca.collect_date
+            ) t1 
+            GROUP BY t1.collect_hour            
+        ) tt1 
+        GROUP BY tt1.collect_hour 
+        ORDER BY tt1.collect_hour
+    """
 
     chart_hour_weekend = {
+        "chart_id": "hour_weekend",
         "title": "시간대별 통행량(주말)",
         "type": "echarts_line",
         "df": conn.query(qr3_2.format(**variables1), ttl=600),
-        "x_col": "collect_hour",  # X축 데이터 컬럼명
-        "y_col": "cnt",  # Y축 데이터 컬럼명
+        "x_col": "collect_hour",
+        "y_col": "cnt",
     }
-
 
     # 3. 요일별(시간대) 평균 통행량
     qr2 = """
@@ -327,6 +322,7 @@ else:
         ) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order
     """
     chart_day_hour = {
+        "chart_id": "day_hour",
         "title": "요일별(시간대) 평균 통행량",
         "type": "area",
         "df": conn.query(qr2.format(**variables1), ttl=600),
@@ -352,11 +348,12 @@ else:
     """
 
     chart_gender = {
+        "chart_id": "gender_pie",
         "title": "성별 통행량",
         "type": "echarts_pie_gender",
         "df": conn.query(qr21.format(**variables1), ttl=600),
-        "name_col": "gender",  # 범례/라벨로 사용할 컬럼명
-        "value_col": "cnt",  # 수치로 사용할 컬럼명
+        "name_col": "gender",
+        "value_col": "cnt",
     }
 
     # 5. 성별(시간대) 평균 통행량
@@ -368,6 +365,7 @@ else:
         ) t1 GROUP BY t1.collect_hour, substring(t1.gender,1,1)
     """
     chart_gender_hour = {
+        "chart_id": "gender_hour",
         "title": "성별(시간대) 평균 통행량",
         "type": "area",
         "df": conn.query(qr22.format(**variables1), ttl=600),
@@ -388,6 +386,7 @@ else:
         ) t1 GROUP BY t1.age ORDER BY age_order
     """
     chart_age = {
+        "chart_id": "age_pie",
         "title": "연령별 통행량",
         "type": "echarts_pie",
         "df": conn.query(qr23.format(**variables1), ttl=600),
@@ -403,6 +402,7 @@ else:
         ) t1 GROUP BY t1.collect_hour, t1.age
     """
     chart_age_hour = {
+        "chart_id": "age_hour",
         "title": "연령별(시간대) 평균 통행량",
         "type": "area",
         "df": conn.query(qr24.format(**variables1), ttl=600),
@@ -416,6 +416,7 @@ else:
     # 8. 방향별 통행량
     qr31 = "SELECT rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} GROUP BY rca.direction"
     chart_dir = {
+        "chart_id": "dir_bar",
         "title": "방향별 통행량",
         "type": "bar",
         "df": conn.query(qr31.format(**variables1), ttl=600),
@@ -428,6 +429,7 @@ else:
     # 9. 방향별(시간대) 평균 통행량
     qr32 = "SELECT rca.collect_hour as collect_hour, rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} GROUP BY rca.collect_hour, rca.direction"
     chart_dir_hour = {
+        "chart_id": "dir_hour",
         "title": "방향별(시간대) 평균 통행량",
         "type": "area",
         "df": conn.query(qr32.format(**variables1), ttl=600),
@@ -439,34 +441,22 @@ else:
     }
 
     # --------------------------------------------------------------------------
-    # C. 대시보드 레이아웃 구성 (배치 변경이 필요할 때 여기만 수정)
+    # C. 대시보드 레이아웃 구성
     # --------------------------------------------------------------------------
 
     # Row 1
-    render_chart_grid(
-        [chart_date], cols_per_row=1
-    )
+    render_chart_grid([chart_date], cols_per_row=1)
 
-    # Row 2
-    render_chart_grid(
-        [chart_hour_weekday, chart_hour_weekday], cols_per_row=2
-    )
+    # Row 2 (주중 / 주말 차트 올바르게 배치)
+    render_chart_grid([chart_hour_weekday, chart_hour_weekend], cols_per_row=2)
 
-    render_chart_grid(
-        [chart_day_hour], cols_per_row=1
-    )
+    render_chart_grid([chart_day_hour], cols_per_row=1)
 
     # Row 3
-    render_chart_grid(
-        [chart_gender, chart_gender_hour],
-        cols_per_row=2
-    )
+    render_chart_grid([chart_gender, chart_gender_hour], cols_per_row=2)
 
     # Row 4
-    render_chart_grid(
-        [chart_age, chart_age_hour],
-        cols_per_row=2
-    )
+    render_chart_grid([chart_age, chart_age_hour], cols_per_row=2)
 
     # Row 5
     render_chart_grid(
