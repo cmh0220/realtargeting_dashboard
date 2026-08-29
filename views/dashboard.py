@@ -7,29 +7,22 @@ from streamlit_echarts import st_echarts
 # ------------------------------------------------------------------------------
 
 
-def render_metric_cards(df_h1, df_h2, df_h3, df_h4):
+def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6):
     """상단 주요 지표 카드를 출력합니다."""
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric(
-        "전체 누적 통행량",
-        f"{format(round(int(df_h1.iloc[0, 0])), ',')}명",
-        "1,200 명",
-    )
-    col2.metric(
-        "일평균 통행량",
-        f"{format(round(int(df_h2.iloc[0, 0])), ',')}명",
-        "1,200 명",
-    )
-    col3.metric(
-        "시간당 통행량",
-        f"{format(round(int(df_h3.iloc[0, 0])), ',')}명",
-        "1,200 명",
-    )
-    col4.metric(
-        "분당 통행량",
-        f"{format(round(int(df_h4.iloc[0, 0])), ',')}명",
-        "-1,200 명",
-    )
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+    # 안전하게 첫 번째 값을 추출하는 헬퍼 함수
+    def get_val(df):
+        if df is not None and not df.empty and df.iloc[0, 0] is not None:
+            return f"{format(round(int(df.iloc[0, 0])), ',')}명"
+        return "0명"
+
+    col1.metric("전체 누적 통행량", get_val(df_h1))
+    col2.metric("일평균 통행량", get_val(df_h2))
+    col3.metric("시간당 통행량", get_val(df_h3))
+    col4.metric("분당 통행량", get_val(df_h4))
+    col5.metric("주중평균 통행량", get_val(df_h5))
+    col6.metric("주말평균 통행량", get_val(df_h6))
 
 
 def render_chart_item(chart_info: Dict[str, Any]):
@@ -192,16 +185,52 @@ else:
     # A. Metric 상단 지표 조회 및 렌더링
     # --------------------------------------------------------------------------
     qr_h1 = "SELECT sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.del_yn = 0"
-    qr_h2 = "SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.collect_hour >= '07' GROUP BY rca.collect_date) t1"
-    qr_h3 = "SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.collect_hour >= '07' GROUP BY rca.collect_date, rca.collect_hour) t1"
-    qr_h4 = "SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.collect_hour >= '07' GROUP BY rca.collect_date, rca.collect_hour) t1"
+    qr_h2 = "SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.del_yn = 0 GROUP BY rca.collect_date) t1"
+    qr_h3 = "SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"
+    qr_h4 = "SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"
+
+    # qr_h5: 주중 평균 통행량
+    qr_h5 = """
+    SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekday_avg
+      FROM (
+        SELECT rca.collect_date AS collect_date, 
+               IFNULL(SUM(rca.collect_cnt), 0) AS cnt
+          FROM rt_collect_board rca 
+          JOIN rt_calendar c ON rca.collect_date = c.dt
+         WHERE rca.user_id = '{id}'
+           AND rca.work_no = {re}
+           AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown')
+           AND rca.del_yn = 0
+           AND c.anal_gubun = 'Weekday'
+         GROUP BY rca.collect_date
+      ) t1
+    """
+
+    # qr_h6: 주말 평균 통행량
+    qr_h6 = """
+    SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekend_avg
+      FROM (
+        SELECT rca.collect_date AS collect_date, 
+               IFNULL(SUM(rca.collect_cnt), 0) AS cnt
+          FROM rt_collect_board rca 
+          JOIN rt_calendar c ON rca.collect_date = c.dt
+         WHERE rca.user_id = '{id}'
+           AND rca.work_no = {re}
+           AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown')
+           AND rca.del_yn = 0
+           AND c.anal_gubun = 'Weekend'
+         GROUP BY rca.collect_date
+      ) t1
+    """
 
     df_h1 = conn.query(qr_h1.format(**variables1), ttl=600)
     df_h2 = conn.query(qr_h2.format(**variables1), ttl=600)
     df_h3 = conn.query(qr_h3.format(**variables1), ttl=600)
     df_h4 = conn.query(qr_h4.format(**variables1), ttl=600)
+    df_h5 = conn.query(qr_h5.format(**variables1), ttl=600)
+    df_h6 = conn.query(qr_h6.format(**variables1), ttl=600)
 
-    render_metric_cards(df_h1, df_h2, df_h3, df_h4)
+    render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6)
     st.write(" ")
 
     # --------------------------------------------------------------------------
