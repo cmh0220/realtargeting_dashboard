@@ -108,7 +108,7 @@ def render_chart_item(chart_info: Dict[str, Any]):
                     "name": title,
                     "type": "pie",
                     "radius": ["40%", "70%"],
-                    "center": ["50%", "70%"],
+                    "center": ["50%", "50%"],
                     "startAngle": 180,
                     "endAngle": 360,
                     "data": chart_data,
