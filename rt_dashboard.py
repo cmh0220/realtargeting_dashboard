@@ -61,11 +61,32 @@ def myclear():
 
 
 # 회원정보 등록 (사이드바)
-# 회원정보 등록 (사이드바)
 with st.sidebar:
     st.subheader("🔑 사용자 인증")
 
-    # 1. 입력 및 적용 폼 (엔터키 입력 시 자동 Submit)
+    # [포인트 1] 적용 상태를 직관적으로 상단에 배너 형태로 표시
+    if st.session_state.get("user_id") and st.session_state.get("user_re"):
+        st.markdown(
+            f"""
+            <div style="
+                background-color: #e6f4ea;
+                border: 1px solid #34a853;
+                border-radius: 8px;
+                padding: 12px;
+                margin-bottom: 15px;
+                color: #137333;
+            ">
+                <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">✅ 인증 적용 중</div>
+                <div style="font-size: 12px;">• ID: <b>{st.session_state['user_id']}</b></div>
+                <div style="font-size: 12px;">• 등록번호: <b>{st.session_state['user_re']}</b></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.info("💡 아이디와 등록번호를 입력 후 적용해주세요.")
+
+    # 1. 입력 및 적용 폼
     with st.form(key="login_form", clear_on_submit=False):
         default_id = st.session_state.get("user_id", "")
         default_re = st.session_state.get("user_re", None)
@@ -85,12 +106,11 @@ with st.sidebar:
             key="input_re_val",
         )
 
-        # Form 내부에는 submit_button만 배치 (엔터키 동작)
-        submit_btn = st.form_submit_button(
+        st.form_submit_button(
             "적용", on_click=handle_submit, use_container_width=True
         )
 
-    # 2. 취소(초기화) 버튼은 Form '외부'에 독립 배치
+    # 2. 초기화 버튼
     st.button("취소/초기화", on_click=myclear, use_container_width=True)
 
 # 페이지 실행
