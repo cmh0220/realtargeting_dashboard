@@ -292,7 +292,7 @@ else:
     """
     chart_date = {
         "chart_id": "date_traffic",
-        "title": "날짜별 통행량",
+        "title": "일자별 통행량",
         "type": "bar",
         "df": conn.query(qr1.format(**variables1), ttl=600),
         "x": "collect_date",
@@ -326,7 +326,7 @@ else:
 
     chart_hour_weekday = {
         "chart_id": "hour_weekday",
-        "title": "시간대별 통행량(주중)",
+        "title": "[주중]시간대별 통행량",
         "type": "echarts_line",
         "df": conn.query(qr3.format(**variables1), ttl=600),
         "x_col": "collect_hour",
@@ -358,7 +358,7 @@ else:
 
     chart_hour_weekend = {
         "chart_id": "hour_weekend",
-        "title": "시간대별 통행량(주말)",
+        "title": "[주말]시간대별 통행량",
         "type": "echarts_line",
         "df": conn.query(qr3_2.format(**variables1), ttl=600),
         "x_col": "collect_hour",
