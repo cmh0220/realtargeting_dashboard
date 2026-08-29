@@ -3,6 +3,29 @@ import streamlit as st
 # 화면설정: wide
 st.set_page_config(layout="wide")
 
+# Streamlit DB 커넥션 선언 (.streamlit/secrets.toml 설정 참조)
+conn = st.connection("mysql", type="sql")
+
+
+def check_user_exists(user_id: str, work_no: int) -> bool:
+    """st.connection을 활용하여 사용자 데이터 존재 여부 검증"""
+    try:
+        sql = """
+            SELECT COUNT(1) AS cnt 
+            FROM rt_collect_all 
+            WHERE user_id = :user_id AND work_no = :work_no AND del_yn = 0
+        """
+        # 파라미터 바인딩을 통해 데이터 조회
+        df = conn.query(sql, params={"user_id": user_id, "work_no": work_no}, ttl=0)
+
+        if not df.empty:
+            return df.iloc[0]["cnt"] > 0
+        return False
+    except Exception as e:
+        st.error(f"DB 조회 중 오류가 발생했습니다: {e}")
+        return False
+
+
 # 세션 상태 초기화
 if "user_id" not in st.session_state:
     st.session_state["user_id"] = None
@@ -42,17 +65,22 @@ def handle_submit():
     input_re = st.session_state.get("input_re_val")
 
     if not input_id or not input_re:
-        st.toast("⚠️ 아이디 및 등록번호를 확인하세요.")
-    else:
+        st.toast("⚠️ 아이디 및 등록번호를 입력하세요.")
+        return
+
+    # DB 조회 검증
+    if check_user_exists(input_id, input_re):
         st.session_state["user_id"] = input_id
         st.session_state["user_re"] = input_re
         st.session_state["id"] = input_id
         st.session_state["re"] = input_re
         st.toast("✔️ 적용완료!")
+    else:
+        st.toast("⚠️ 아이디 혹은 등록번호를 다시 확인하시기 바랍니다.")
 
 
 def myclear():
-    # 세션값 초기화 (입력창 비활성화 해제됨)
+    # 세션값 초기화
     st.session_state.clear()
     st.toast("🧹 초기화되었습니다.")
 
@@ -92,7 +120,6 @@ with st.sidebar:
         default_id = st.session_state.get("user_id", "")
         default_re = st.session_state.get("user_re", None)
 
-        # is_authenticated 상태에 따라 disabled 옵션 적용
         st.text_input(
             "🆔 아이디",
             value=default_id if default_id else "",
