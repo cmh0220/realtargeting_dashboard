@@ -73,12 +73,8 @@ else:
 
     left, center, right = st.columns(3, vertical_alignment="bottom")
 
-    ##########################################
-    # Left
-    ##########################################
     left.write("😊날짜별 통행량")
     left.write(" ")
-
     qr1 = """
         SELECT 
             DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') AS collect_date,
@@ -91,14 +87,9 @@ else:
         GROUP BY DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') 
         ORDER BY MIN(STR_TO_DATE(rca.collect_date, '%Y%m%d'));
     """
-
-
     df1 = conn.query(qr1.format(**variables1), ttl=600)
     left.bar_chart(df1, x="collect_date", y='cnt', x_label='일자', y_label='통행량', height=300)
 
-    ##########################################
-    # Center
-    ##########################################
     center.write("😊시간대별 통행량")
     center.write(" ")
     qr3 = """
@@ -121,12 +112,8 @@ else:
     df3 = conn.query(qr3.format(**variables1), ttl=600)
     center.area_chart(df3, x="collect_hour", y='cnt', x_label='시간', y_label='통행량', height=300)
 
-    ##########################################
-    # Right
-    ##########################################
     right.write("😊요일별(시간대) 평균 통행량")
     right.write(" ")
-
     qr2 = """
         select t1.collect_hour, t1.collect_day, t1.collect_order, avg(t1.cnt)	as cnt 
         from (
@@ -168,20 +155,15 @@ else:
     group by t1.collect_hour, t1.collect_day, t1.collect_order
     order by t1.collect_hour, t1.collect_day, t1.collect_order
     """
-
     df2 = conn.query(qr2.format(**variables1), ttl=600)
     right.area_chart(df2, x="collect_hour", y='cnt', color='collect_day', x_label='요일', y_label='통행량', height=300)
 
+    # 2번째 행
 
+    c1, c2, c3, c4 = st.columns([0.1, 0.3, 0.3, 0.3], vertical_alignment="bottom")
 
-    c1, c2, c3, c4 = st.columns([0.1, 0.3, 0.2, 0.4], vertical_alignment="bottom")
-
-    ##########################################
-    # c1
-    ##########################################
     c1.write("😊성별 통행량")
     c1.write(" ")
-
     qr21 = """
         select (CASE WHEN substring(rca.class,1,1) = 'm' THEN '남성'
         WHEN substring(rca.class,1,1) = 'w' THEN '여성' END) as gender, sum(rca.collect_cnt) as cnt
@@ -192,17 +174,12 @@ else:
           group by (CASE WHEN substring(rca.class,1,1) = 'm' THEN '남성'
         WHEN substring(rca.class,1,1) = 'w' THEN '여성' END)
     """
-
-
     df21 = conn.query(qr21.format(**variables1), ttl=600)
     c1.bar_chart(df21, x="gender", y='cnt', x_label='성별', y_label='통행량', height=300)
 
-    ##########################################
-    # c2
-    ##########################################
+
     c2.write("😊성별(시간대) 평균 통행량")
     c2.write(" ")
-
     qr22 = """
           select t1.collect_hour as hour, substring(t1.gender,1,1) as gender, round(avg(t1.cnt)) as cnt
           from (
@@ -214,17 +191,12 @@ else:
           group by rca.collect_hour, rca.class, rca.collect_date ) t1
           group by t1.collect_hour, substring(t1.gender,1,1)
     """
-
     df22 = conn.query(qr22.format(**variables1), ttl=600)
     c2.area_chart(df22, x="hour", y='cnt', color='gender', x_label='시간대', y_label='통행량', height=300)
 
-    ##########################################
-    # c3
-    ##########################################
 
     c3.write("😊연령별 통행량")
     c3.write(" ")
-
     qr23 = """
             select (CASE WHEN t1.age = '01' THEN '10대 이하'
                         WHEN t1.age = '23' THEN '20~30대'
@@ -249,7 +221,6 @@ else:
             group by t1.age
             order by age_order
     """
-
     df23 = conn.query(qr23.format(**variables1), ttl=600)
 
     # 1. 데이터프레임을 ECharts가 요구하는 [{"name": ..., "value": ...}] 형태의 리스트로 변환
@@ -265,7 +236,7 @@ else:
             "formatter": "{b}: {c} ({d}%)"  # 마우스 올렸을 때 [이름: 값 (비율%)] 표시
         },
         "legend": {
-            "top": "5%",
+            "bottom": "5%",
             "left": "center"
         },
         "series": [
@@ -274,8 +245,8 @@ else:
                 "type": "pie",
                 "radius": ["40%", "70%"],
                 "center": ["50%", "70%"],
-                "startAngle": 180,
-                "endAngle": 360,
+                "startAngle": 0,
+                "endAngle": 180,
                 "data": chart_data,  # 변환한 데이터 주입
             }
         ],
@@ -283,14 +254,11 @@ else:
 
     # 3. Streamlit에 ECharts 출력 (반원 형태이므로 높이를 300px~350px로 조정하면 여백이 적당합니다)
     with c3:
-        st_echarts(options=options, height="320px")
+        st_echarts(options=options, height="300px")
 
-    ##########################################
-    # c4
-    ##########################################
+
     c4.write("😊연령별(시간대) 평균 통행량")
     c4.write(" ")
-
     qr24 = """
             select t1.collect_hour as hour
                 , (CASE WHEN t1.age = '01' THEN '10대 이하'
@@ -311,16 +279,13 @@ else:
                   group by rca.collect_hour, substring(rca.class, 2, 2)) t1
             group by t1.collect_hour, t1.age
     """
-
     df24 = conn.query(qr24.format(**variables1), ttl=600)
     c4.area_chart(df24, x="hour", y='cnt', color='age', x_label='시간대', y_label='통행량', height=300)
 
-
+    # 3번째 행
     d1, d2 = st.columns([0.2, 0.8], vertical_alignment="bottom")
 
-    ##########################################
-    # d1
-    ##########################################
+
     d1.write("😊방향별 통행량")
     d1.write(" ")
 
