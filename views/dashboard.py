@@ -249,7 +249,8 @@ else:
         WHERE rca.user_id = '{id}' 
           AND rca.work_no = {re} 
           AND (rca.class like 'm%' OR rca.class like 'w%')
-        GROUP BY gender
+        GROUP BY (CASE WHEN substring(rca.class,1,1) = 'm' THEN '남성' 
+                  WHEN substring(rca.class,1,1) = 'w' THEN '여성' END)
     """
 
     chart_gender = {
