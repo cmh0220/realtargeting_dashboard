@@ -254,7 +254,7 @@ else:
     }
 
     # 2. 시간대별 통행량
-    qr3_2 = """
+    qr3 = """
         SELECT tt1.collect_hour, SUM(tt1.cnt) AS cnt 
         FROM (
             SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
@@ -279,7 +279,7 @@ else:
     chart_hour_weekday = {
         "title": "시간대별 통행량(주중)",
         "type": "echarts_line",
-        "df": conn.query(qr3_2.format(**variables1), ttl=600),
+        "df": conn.query(qr3.format(**variables1), ttl=600),
         "x_col": "collect_hour",  # X축 데이터 컬럼명
         "y_col": "cnt",  # Y축 데이터 컬럼명
     }
