@@ -195,7 +195,7 @@ else:
       FROM (
         SELECT rca.collect_date AS collect_date, 
                IFNULL(SUM(rca.collect_cnt), 0) AS cnt
-          FROM rt_collect_board rca 
+          FROM rt_collect_all rca 
           JOIN rt_calendar c ON rca.collect_date = c.dt
          WHERE rca.user_id = '{id}'
            AND rca.work_no = {re}
@@ -212,7 +212,7 @@ else:
       FROM (
         SELECT rca.collect_date AS collect_date, 
                IFNULL(SUM(rca.collect_cnt), 0) AS cnt
-          FROM rt_collect_board rca 
+          FROM rt_collect_all rca 
           JOIN rt_calendar c ON rca.collect_date = c.dt
          WHERE rca.user_id = '{id}'
            AND rca.work_no = {re}
@@ -254,22 +254,66 @@ else:
     }
 
     # 2. 시간대별 통행량
-    qr3 = """
-        SELECT tt1.collect_hour, sum(tt1.cnt) as cnt FROM (
-            SELECT t1.collect_hour, round(avg(t1.cnt)) as cnt FROM (
-                SELECT rca.collect_hour as collect_hour, rca.collect_date as collect_date, sum(rca.collect_cnt) as cnt   
-                FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} GROUP BY rca.collect_hour, rca.collect_date
-            ) t1 GROUP BY t1.collect_hour            
-        ) tt1 GROUP BY tt1.collect_hour ORDER BY tt1.collect_hour
+    qr3_2 = """
+        SELECT tt1.collect_hour, SUM(tt1.cnt) AS cnt 
+        FROM (
+            SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
+            FROM (
+                SELECT rca.collect_hour AS collect_hour, 
+                       rca.collect_date AS collect_date, 
+                       SUM(rca.collect_cnt) AS cnt   
+                FROM rt_collect_all rca 
+                JOIN rt_calendar c ON rca.collect_date = c.dt
+                WHERE rca.user_id = '{id}' 
+                  AND rca.work_no = {re} 
+                  AND rca.del_yn = 0 
+                  AND c.anal_gubun = 'Weekday'
+                GROUP BY rca.collect_hour, rca.collect_date
+            ) t1 
+            GROUP BY t1.collect_hour            
+        ) tt1 
+        GROUP BY tt1.collect_hour 
+        ORDER BY tt1.collect_hour
     """
 
-    chart_hour = {
-        "title": "시간대별 통행량",
+    chart_hour_weekday = {
+        "title": "시간대별 통행량(주중)",
         "type": "echarts_line",
-        "df": conn.query(qr3.format(**variables1), ttl=600),
+        "df": conn.query(qr3_2.format(**variables1), ttl=600),
         "x_col": "collect_hour",  # X축 데이터 컬럼명
         "y_col": "cnt",  # Y축 데이터 컬럼명
     }
+
+    qr3_2 = """
+            SELECT tt1.collect_hour, SUM(tt1.cnt) AS cnt 
+            FROM (
+                SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
+                FROM (
+                    SELECT rca.collect_hour AS collect_hour, 
+                           rca.collect_date AS collect_date, 
+                           SUM(rca.collect_cnt) AS cnt   
+                    FROM rt_collect_all rca 
+                    JOIN rt_calendar c ON rca.collect_date = c.dt
+                    WHERE rca.user_id = '{id}' 
+                      AND rca.work_no = {re} 
+                      AND rca.del_yn = 0 
+                      AND c.anal_gubun = 'Weekend'
+                    GROUP BY rca.collect_hour, rca.collect_date
+                ) t1 
+                GROUP BY t1.collect_hour            
+            ) tt1 
+            GROUP BY tt1.collect_hour 
+            ORDER BY tt1.collect_hour
+        """
+
+    chart_hour_weekend = {
+        "title": "시간대별 통행량(주말)",
+        "type": "echarts_line",
+        "df": conn.query(qr3_2.format(**variables1), ttl=600),
+        "x_col": "collect_hour",  # X축 데이터 컬럼명
+        "y_col": "cnt",  # Y축 데이터 컬럼명
+    }
+
 
     # 3. 요일별(시간대) 평균 통행량
     qr2 = """
@@ -405,7 +449,11 @@ else:
 
     # Row 2
     render_chart_grid(
-        [chart_hour, chart_day_hour], cols_per_row=2
+        [chart_hour_weekday, chart_hour_weekday], cols_per_row=2
+    )
+
+    render_chart_grid(
+        [chart_day_hour], cols_per_row=1
     )
 
     # Row 3
