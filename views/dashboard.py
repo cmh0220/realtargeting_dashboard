@@ -79,10 +79,16 @@ else:
     left.write(" ")
 
     qr1 = """
-                    select DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') as collect_date
-                    ,  sum(rca.collect_cnt) as cnt, sum(rca.collect_cnt * 1000) as amt from rt_collect_all rca
-                    where rca.user_id = '{id}' and rca.work_no = {re}
-                    and rca.del_yn = 0 group by DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') order by rca.collect_date
+        SELECT 
+            DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') AS collect_date,
+            SUM(rca.collect_cnt) AS cnt, 
+            SUM(rca.collect_cnt * 1000) AS amt 
+        FROM rt_collect_all rca
+        WHERE rca.user_id = '{id}' 
+          AND rca.work_no = {re}
+          AND rca.del_yn = 0 
+        GROUP BY DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') 
+        ORDER BY MIN(STR_TO_DATE(rca.collect_date, '%Y%m%d'));
     """
 
 
