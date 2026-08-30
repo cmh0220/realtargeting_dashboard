@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 import streamlit as st
-from streamlit_echarts import st_echarts
+from streamlit_echarts import st_echarts, JsCode
 
 # ------------------------------------------------------------------------------
 # 1. 공통 차트 렌더러 (Chart Component Functions)
@@ -111,32 +111,69 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
         st_echarts(options=option, height="300px", key=f"echarts_line_{chart_id}")
 
+
     elif chart_type == "echarts_pie_gender":
+
         name_col = chart_info.get("name_col", "age")
+
         val_col = chart_info.get("value_col", "cnt")
 
         chart_data = [
+
             {"name": row[name_col], "value": int(row[val_col])}
+
             for _, row in df.iterrows()
+
         ]
 
         options = {
+
             "tooltip": {
+
                 "trigger": "item",
-                "formatter": "{b}: {c} ({d}%)",
+
+                # JsCode를 사용하여 수치(params.value)에 천 단위 쉼표(toLocaleString) 적용
+
+                "formatter": JsCode(
+
+                    """
+
+                    function (params) {
+
+                        return params.name + ': ' + params.value.toLocaleString() + ' (' + params.percent + '%)';
+
+                    }
+
+                """
+
+                ),
+
             },
+
             "legend": {"top": "5%", "left": "center"},
+
             "series": [
+
                 {
+
                     "name": title,
+
                     "type": "pie",
+
                     "radius": ["40%", "70%"],
+
                     "center": ["50%", "50%"],
+
                     "startAngle": 180,
+
                     "endAngle": 360,
+
                     "data": chart_data,
+
                 }
+
             ],
+
         }
 
         st_echarts(options=options, height="300px", key=f"echarts_gender_{chart_id}")
@@ -224,7 +261,14 @@ st.logo(
 
 conn = st.connection("mysql", type="sql")
 
-if st.session_state.get("id") is None or st.session_state.get("re") is None:
+st.subheader("대시보드", divider="blue")
+st.write(" ")
+
+# session_state에 키가 없거나 값이 None/빈값인 경우를 안전하게 체크
+user_id = st.session_state.get("id") or st.session_state.get("user_id")
+user_re = st.session_state.get("re") or st.session_state.get("user_re")
+
+if not user_id or not user_re:
     st.write("⚠️아이디 및 등록번호를 확인하세요.")
     # st.toast("⚠️아이디 및 등록번호를 확인하세요.")
 else:
