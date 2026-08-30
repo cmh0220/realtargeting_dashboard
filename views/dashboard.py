@@ -112,6 +112,7 @@ def render_chart_item(chart_info: Dict[str, Any]):
         st_echarts(options=option, height="300px", key=f"echarts_line_{chart_id}")
 
 
+
     elif chart_type == "echarts_pie_gender":
 
         name_col = chart_info.get("name_col", "age")
@@ -132,21 +133,9 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
                 "trigger": "item",
 
-                # JsCode를 사용하여 수치(params.value)에 천 단위 쉼표(toLocaleString) 적용
+                # ECharts 5.x 이상 지원 기본 툴팁 포맷터 (천 단위 쉼표 적용)
 
-                "formatter": JsCode(
-
-                    """
-
-                    function (params) {
-
-                        return params.name + ': ' + params.value.toLocaleString() + ' (' + params.percent + '%)';
-
-                    }
-
-                """
-
-                ),
+                "valueFormatter": "{value:,}",
 
             },
 
