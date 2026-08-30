@@ -153,9 +153,9 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
                     "center": ["50%", "50%"],
 
-                    "startAngle": 180,
+                    "startAngle": 90,
 
-                    "endAngle": 360,
+                    "endAngle": 270,
 
                     "data": chart_data,
 
