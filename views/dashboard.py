@@ -320,7 +320,7 @@ else:
     # 1. 날짜별 통행량
     qr1 = """
         SELECT DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') AS collect_date, SUM(rca.collect_cnt) AS cnt, SUM(rca.collect_cnt * 1000) AS amt 
-        FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.del_yn = 0 
+        FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0  
         GROUP BY DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') ORDER BY MIN(STR_TO_DATE(rca.collect_date, '%Y%m%d'));
     """
     chart_date = {
@@ -347,6 +347,7 @@ else:
                 JOIN rt_calendar c ON rca.collect_date = c.dt
                 WHERE rca.user_id = '{id}' 
                   AND rca.work_no = {re} 
+                  AND (rca.class like 'm%' OR rca.class like 'w%') 
                   AND rca.del_yn = 0 
                   AND c.anal_gubun = 'Weekday'
                 GROUP BY rca.collect_hour, rca.collect_date
@@ -380,6 +381,7 @@ else:
                 WHERE rca.user_id = '{id}' 
                   AND rca.work_no = {re} 
                   AND rca.del_yn = 0 
+                  AND (rca.class like 'm%' OR rca.class like 'w%')
                   AND c.anal_gubun = 'Weekend'
                 GROUP BY rca.collect_hour, rca.collect_date
             ) t1 
@@ -406,6 +408,9 @@ else:
                 (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order,
                 rca.collect_hour as collect_hour, rca.collect_date as collect_date, sum(rca.collect_cnt) as cnt
             FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re}
+            WHERE 1=1
+            AND (rca.class like 'm%' OR rca.class like 'w%')
+            AND rca.del_yn = 0
             GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date
         ) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order
     """
@@ -426,6 +431,7 @@ else:
         WHERE rca.user_id = '{id}' 
           AND rca.work_no = {re} 
           AND (rca.class like 'm%' OR rca.class like 'w%')
+          AND rca.del_yn = 0
         GROUP BY (CASE WHEN substring(rca.class,1,1) = 'm' THEN '남성' 
                   WHEN substring(rca.class,1,1) = 'w' THEN '여성' END)
     """
@@ -444,6 +450,7 @@ else:
         SELECT t1.collect_hour as hour, substring(t1.gender,1,1) as gender, round(avg(t1.cnt)) as cnt FROM (
             SELECT rca.collect_hour as collect_hour, rca.class as gender, rca.collect_date as collect_date, sum(rca.collect_cnt) as cnt
             FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%')
+            and rca.del_yn = 0
             GROUP BY rca.collect_hour, rca.class, rca.collect_date
         ) t1 GROUP BY t1.collect_hour, substring(t1.gender,1,1)
     """
@@ -481,7 +488,7 @@ else:
                (CASE WHEN t1.age = '01' THEN '10대 이하' WHEN t1.age = '23' THEN '20~30대' WHEN t1.age = '45' THEN '40~50대' WHEN t1.age = '67' THEN '60대 이상' END) as age,
                sum(t1.cnt) as cnt
         FROM (
-            SELECT rca.collect_hour as collect_hour, substring(rca.class, 2, 2) as age, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') GROUP BY rca.collect_hour, substring(rca.class, 2, 2)
+            SELECT rca.collect_hour as collect_hour, substring(rca.class, 2, 2) as age, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') and rca.del_yn = 0 GROUP BY rca.collect_hour, substring(rca.class, 2, 2)
         ) t1 GROUP BY t1.collect_hour, t1.age
     """
     chart_age_hour = {
@@ -497,7 +504,7 @@ else:
     }
 
     # 8. 방향별 통행량
-    qr31 = "SELECT rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} GROUP BY rca.direction"
+    qr31 = "SELECT rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.direction"
     chart_dir = {
         "chart_id": "dir_bar",
         "title": "방향별 통행량",
@@ -510,7 +517,7 @@ else:
     }
 
     # 9. 방향별(시간대) 평균 통행량
-    qr32 = "SELECT rca.collect_hour as collect_hour, rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} GROUP BY rca.collect_hour, rca.direction"
+    qr32 = "SELECT rca.collect_hour as collect_hour, rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_hour, rca.direction"
     chart_dir_hour = {
         "chart_id": "dir_hour",
         "title": "방향별(시간대) 평균 통행량",
