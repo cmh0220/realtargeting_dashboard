@@ -266,10 +266,10 @@ else:
     # --------------------------------------------------------------------------
     # A. Metric 상단 지표 조회 및 렌더링
     # --------------------------------------------------------------------------
-    qr_h1 = "SELECT sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.del_yn = 0"
+    qr_h1 = "SELECT sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 "
     qr_h2 = "SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 GROUP BY rca.collect_date) t1"
-    qr_h3 = "SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"
-    qr_h4 = "SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"
+    qr_h3 = "SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0  GROUP BY rca.collect_date, rca.collect_hour) t1"
+    qr_h4 = "SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0  GROUP BY rca.collect_date, rca.collect_hour) t1"
 
     qr_h5 = """
     SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekday_avg
@@ -408,8 +408,7 @@ else:
                 (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order,
                 rca.collect_hour as collect_hour, rca.collect_date as collect_date, sum(rca.collect_cnt) as cnt
             FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re}
-            WHERE 1=1
-            AND (rca.class like 'm%' OR rca.class like 'w%')
+            WHERE (rca.class like 'm%' OR rca.class like 'w%')
             AND rca.del_yn = 0
             GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date
         ) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order
