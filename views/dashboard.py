@@ -408,7 +408,7 @@ else:
                 (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order,
                 rca.collect_hour as collect_hour, rca.collect_date as collect_date, sum(rca.collect_cnt) as cnt
             FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re}
-            WHERE (rca.class like 'm%' OR rca.class like 'w%')
+            AND (rca.class like 'm%' OR rca.class like 'w%')
             AND rca.del_yn = 0
             GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date
         ) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order
