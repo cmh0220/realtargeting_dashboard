@@ -44,8 +44,8 @@ pages = {
         st.Page("views/dashboard.py", title="   대시보드"),
     ],
     "🚗차량분석": [
-        st.Page("views/today_car.py", title="   일일 모니터링"),
-        st.Page("views/dashboard_car.py", title="   대시보드"),
+        st.Page("views/today_car.py", title="   일일 모니터링(준비중)"),
+        st.Page("views/dashboard_car.py", title="   대시보드(준비중)"),
     ],
 }
 
