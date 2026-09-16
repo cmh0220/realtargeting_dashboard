@@ -7,7 +7,7 @@ if 're' not in st.session_state:
     st.session_state['re'] = None
 
 url = "https://pf.kakao.com/_vfxaZn"
-url2 = "https://realtargeting.imweb.me"
+url2 = "https://www.realtargeting.co.kr"
 
 st.subheader("이용 가이드", divider="blue")
 st.write("🔎**이용방법**")
@@ -29,6 +29,6 @@ edge.write(" ")
 st.write("💬카카오 채널 : [바로가기](%s)" % url)
 st.write("📞유선 연락처 : 010-4424-3291")
 st.write("📨메일 : realtargeting@gmail.com")
-st.write("🏠홈페이지 : [바로가기](%s)" % url2)
+st.write("🏠홈페이지 : [https://www.realtargeting.co.kr](%s)" % url2)
 st.write(" ")
 st.write("Copyright (R)Realtargeting All right reserved.")

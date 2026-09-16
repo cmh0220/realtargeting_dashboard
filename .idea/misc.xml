@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="dashboard" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="dashboard" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.12 (realtargeting_dashboard)" project-jdk-type="Python SDK" />
 </project>

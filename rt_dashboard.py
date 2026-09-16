@@ -132,7 +132,6 @@ with st.sidebar:
             min_value=1,
             max_value=99999999,
             step=1,
-            placeholder="12345678",
             key="input_re_val",
             disabled=is_authenticated,
         )
