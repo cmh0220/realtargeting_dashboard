@@ -3,6 +3,18 @@ import streamlit as st
 # 화면설정: wide
 st.set_page_config(layout="wide")
 
+# Form 하단의 "Press ↵ to submit form" 안내 문구 숨기기 CSS
+st.markdown(
+    """
+    <style>
+    div[data-testid="InputInstructions"] {
+        display: none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Streamlit DB 커넥션 선언 (.streamlit/secrets.toml 설정 참조)
 conn = st.connection("mysql", type="sql")
 
@@ -35,23 +47,7 @@ if "input_id_val" not in st.session_state:
 if "input_re_val" not in st.session_state:
     st.session_state["input_re_val"] = None
 
-# 좌측메뉴 세팅
-pages = {
-    "🏠홈": [
-        st.Page("views/main.py", title="   메인화면", default=True),
-        st.Page("views/guide.py", title="   이용 가이드"),
-    ],
-    "👨‍👩‍👧‍👦방문자분석": [
-        st.Page("views/today.py", title="   일일 모니터링"),
-        st.Page("views/dashboard.py", title="   대시보드"),
-    ],
-    "🚗차량분석": [
-        st.Page("views/today_car.py", title="   일일 모니터링(준비중)"),
-        st.Page("views/dashboard_car.py", title="   대시보드(준비중)"),
-    ],
-}
-
-pg = st.navigation(pages)
+# 원래 메뉴 자리
 
 # 로고 세팅
 st.logo(
@@ -67,7 +63,7 @@ def handle_submit():
     input_re = st.session_state.get("input_re_val")
 
     if not input_id or not input_re:
-        st.toast("⚠️ 아이디 및 등록번호를 입력하세요.")
+        st.toast("⚠️ 아이디 및 비밀번호를 입력하세요.")
         return
 
     # DB 조회 검증
@@ -78,7 +74,7 @@ def handle_submit():
         st.session_state["re"] = int(input_re)
         st.toast("✔️ 적용완료!")
     else:
-        st.toast("⚠️ 아이디 혹은 등록번호를 다시 확인하시기 바랍니다.")
+        st.toast("⚠️ 아이디 혹은 비밀번호를 다시 확인하시기 바랍니다.")
 
 
 def myclear():
@@ -103,7 +99,7 @@ with st.sidebar:
         st.session_state.get("user_id") and st.session_state.get("user_re")
     )
 
-    # 적용 상태 배너 (시인성 강화 다크/라이트 모드 대응 스타일)
+    # 1. 인증 완료 시: 배너 표시 및 취소/초기화 버튼 출력 (폼은 숨김)
     if is_authenticated:
         st.markdown(
             f"""
@@ -115,40 +111,53 @@ with st.sidebar:
                 margin-bottom: 15px;
             ">
                 <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #34a853;">✅ 인증 적용 중</div>
-                <div style="font-size: 13px;">• ID: <b>{st.session_state['user_id']}</b></div>
-                <div style="font-size: 13px;">• 등록번호: <b>{st.session_state['user_re']}</b></div>
+                <div style="font-size: 13px;">• ID: <b>{st.session_state['user_id']}</b></div>                
             </div>
             """,
             unsafe_allow_html=True,
         )
+        # 초기화 버튼
+        st.button("로그아웃 / 초기화", on_click=myclear, use_container_width="stretch")
+
+    # 2. 미인증 시: 입력 안내 및 로그인 폼 표시
     else:
-        st.info("💡 아이디와 등록번호를 입력 후 적용해주세요.")
+        with st.form(key="login_form", clear_on_submit=False):
+            st.text_input(
+                "🆔 아이디",
+                key="input_id_val",
+            )
+            st.number_input(
+                "🔑 비밀번호",
+                min_value=1,
+                max_value=99999999,
+                step=1,
+                key="input_re_val",
+            )
 
-    # 1. 입력 및 적용 폼
-    with st.form(key="login_form", clear_on_submit=False):
-        st.text_input(
-            "🆔 아이디",
-            key="input_id_val",
-            disabled=is_authenticated,
-        )
-        st.number_input(
-            "🔑 등록번호",
-            min_value=1,
-            max_value=99999999,
-            step=1,
-            key="input_re_val",
-            disabled=is_authenticated,
-        )
+            st.form_submit_button(
+                "적용",
+                on_click=handle_submit,
+                use_container_width="stretch",
+            )
+# st.info("💡 아이디와 등록번호를 입력 후 적용해주세요.")
 
-        st.form_submit_button(
-            "적용",
-            on_click=handle_submit,
-            use_container_width=True,
-            disabled=is_authenticated,
-        )
+# 좌측메뉴 세팅
+pages = {
+    "🏠홈": [
+        st.Page("views/main.py", title="   메인화면", default=True),
+        st.Page("views/guide.py", title="   이용 가이드"),
+    ],
+    "👨‍👩‍👧‍👦방문자분석": [
+        st.Page("views/today.py", title="   일일 모니터링"),
+        st.Page("views/dashboard.py", title="   통합 대시보드"),
+    ],
+    "🚗차량분석": [
+        st.Page("views/today_car.py", title="   일일 모니터링(준비중)"),
+        st.Page("views/dashboard_car.py", title="   통합 대시보드(준비중)"),
+    ],
+}
 
-    # 2. 초기화 버튼
-    st.button("취소/초기화", on_click=myclear, use_container_width=True)
+pg = st.navigation(pages)
 
 # 페이지 실행
 pg.run()

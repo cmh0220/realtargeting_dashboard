@@ -250,7 +250,7 @@ st.logo(
 
 conn = st.connection("mysql", type="sql")
 
-st.subheader("대시보드", divider="blue")
+st.subheader("통합 대시보드", divider="blue")
 st.write(" ")
 
 # session_state에 키가 없거나 값이 None/빈값인 경우를 안전하게 체크
@@ -258,8 +258,8 @@ user_id = st.session_state.get("id") or st.session_state.get("user_id")
 user_re = st.session_state.get("re") or st.session_state.get("user_re")
 
 if not user_id or not user_re:
-    st.write("⚠️아이디 및 등록번호를 확인하세요.")
-    # st.toast("⚠️아이디 및 등록번호를 확인하세요.")
+    st.write("⚠️아이디 및 비밀번호를 확인하세요.")
+    # st.toast("⚠️아이디 및 비밀번호를 확인하세요.")
 else:
     variables1 = {"id": st.session_state["id"], "re": st.session_state["re"]}
 

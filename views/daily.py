@@ -4,22 +4,9 @@ import streamlit as st
 st.logo("images/logo_wide.png", size="large", link="https://realtargeting.streamlit.app")
 
 
-
-# if 'id' not in st.session_state:
-#     st.session_state['id'] = None
-#
-# if 're' not in st.session_state:
-#     st.session_state['re'] = None
-
-# with st.sidebar:
-#
-#
-#     # st.text_input("아이디", st.session_state['id2'], disabled=True)
-#     # st.text_input("등록번호",  st.session_state['re2'], disabled=True)
-
 conn = st.connection("mysql", type='sql')
 
-st.title("날짜별 분석")
+st.title("[리얼타겟팅] 일일 모니터링")
 st.write(" ")
 
 
@@ -27,7 +14,7 @@ if st.session_state['id'] == None or st.session_state['re'] == None:
     st.write("⚠️아이디 및 등록번호를 확인하세요.")
     st.toast("⚠️아이디 및 등록번호를 확인하세요.")
 else:
-    st.write("😊날짜별 통행량")
+    st.write("일자별 통행량")
     st.write(" ")
 
     df = conn.query(f"select DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') as collect_date"
@@ -37,7 +24,7 @@ else:
         , ttl=600)
     st.bar_chart(df, x="collect_date", y='cnt', x_label='일자', y_label='통행량')
 
-    st.write("😊요일별 평균 통행량")
+    st.write("요일별 평균 통행량")
     st.write(" ")
 
     df2 = conn.query(
