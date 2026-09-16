@@ -15,7 +15,6 @@ def check_user_exists(user_id: str, work_no: int) -> bool:
             FROM rt_collect_all 
             WHERE user_id = :user_id AND work_no = :work_no AND del_yn = 0
         """
-        # 파라미터 바인딩을 통해 데이터 조회
         df = conn.query(sql, params={"user_id": user_id, "work_no": work_no}, ttl=0)
 
         if not df.empty:
@@ -26,12 +25,15 @@ def check_user_exists(user_id: str, work_no: int) -> bool:
         return False
 
 
-# 세션 상태 초기화
+# 세션 상태 초기화 (입력 필드용 키 포함)
 if "user_id" not in st.session_state:
     st.session_state["user_id"] = None
-
 if "user_re" not in st.session_state:
     st.session_state["user_re"] = None
+if "input_id_val" not in st.session_state:
+    st.session_state["input_id_val"] = ""
+if "input_re_val" not in st.session_state:
+    st.session_state["input_re_val"] = None
 
 # 좌측메뉴 세팅
 pages = {
@@ -69,19 +71,26 @@ def handle_submit():
         return
 
     # DB 조회 검증
-    if check_user_exists(input_id, input_re):
+    if check_user_exists(input_id, int(input_re)):
         st.session_state["user_id"] = input_id
-        st.session_state["user_re"] = input_re
+        st.session_state["user_re"] = int(input_re)
         st.session_state["id"] = input_id
-        st.session_state["re"] = input_re
+        st.session_state["re"] = int(input_re)
         st.toast("✔️ 적용완료!")
     else:
         st.toast("⚠️ 아이디 혹은 등록번호를 다시 확인하시기 바랍니다.")
 
 
 def myclear():
-    # 세션값 초기화
-    st.session_state.clear()
+    # 세션값 및 입력 위젯 상태 명시적 리셋
+    st.session_state["user_id"] = None
+    st.session_state["user_re"] = None
+    st.session_state["input_id_val"] = ""
+    st.session_state["input_re_val"] = None
+    if "id" in st.session_state:
+        del st.session_state["id"]
+    if "re" in st.session_state:
+        del st.session_state["re"]
     st.toast("🧹 초기화되었습니다.")
 
 
@@ -94,20 +103,20 @@ with st.sidebar:
         st.session_state.get("user_id") and st.session_state.get("user_re")
     )
 
-    # 적용 상태 배너
+    # 적용 상태 배너 (시인성 강화 다크/라이트 모드 대응 스타일)
     if is_authenticated:
         st.markdown(
             f"""
             <div style="
-                background-color: #e6f4ea;
+                background-color: rgba(52, 168, 83, 0.15);
                 border: 1px solid #34a853;
                 border-radius: 8px;
                 padding: 12px;
                 margin-bottom: 15px;
-                color: #137333;
             ">
-                <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px;">✅ 인증 적용 중</div>
-                <div style="font-size: 12px;">• ID: <b>{st.session_state['user_id']}</b></div>
+                <div style="font-weight: bold; font-size: 14px; margin-bottom: 4px; color: #34a853;">✅ 인증 적용 중</div>
+                <div style="font-size: 13px;">• ID: <b>{st.session_state['user_id']}</b></div>
+                <div style="font-size: 13px;">• 등록번호: <b>{st.session_state['user_re']}</b></div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -117,18 +126,13 @@ with st.sidebar:
 
     # 1. 입력 및 적용 폼
     with st.form(key="login_form", clear_on_submit=False):
-        default_id = st.session_state.get("user_id", "")
-        default_re = st.session_state.get("user_re", None)
-
         st.text_input(
             "🆔 아이디",
-            value=default_id if default_id else "",
             key="input_id_val",
             disabled=is_authenticated,
         )
         st.number_input(
             "🔑 등록번호",
-            value=default_re if default_re else None,
             min_value=1,
             max_value=99999999,
             step=1,
