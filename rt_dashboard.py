@@ -1,5 +1,25 @@
 import streamlit as st
 
+st.markdown(
+    """
+    <style>
+        /* st.logo 이미지 컨테이너 크기 확대 */
+        [data-testid="stSidebarHeader"] img {
+            height: 100px !important;   /* 원하는 높이로 조절 (기본 약 24~32px) */
+            width: auto !important;
+            max-width: 100% !important;
+        }
+        /* 로고 영역 컨테이너 여백 조정 */
+        [data-testid="stSidebarHeader"] {
+            padding-top: 40px !important;
+            padding-bottom: 40px !important;
+            padding-left: 0px !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # 화면설정: wide
 st.set_page_config(layout="wide")
 
@@ -55,6 +75,7 @@ st.logo(
     size="large",
     link="https://realtargeting.streamlit.app",
 )
+
 
 
 # 콜백 및 폼 제출 처리 함수

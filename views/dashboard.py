@@ -2,6 +2,25 @@ from typing import Any, Dict, List
 import streamlit as st
 from streamlit_echarts import st_echarts
 
+st.markdown(
+    """
+    <style>
+        /* st.logo 이미지 컨테이너 크기 확대 */
+        [data-testid="stSidebarHeader"] img {
+            height: 100px !important;   /* 원하는 높이로 조절 (기본 약 24~32px) */
+            width: auto !important;
+            max-width: 100% !important;
+        }
+        /* 로고 영역 컨테이너 여백 조정 */
+        [data-testid="stSidebarHeader"] {
+            padding-top: 40px !important;
+            padding-bottom: 40px !important;
+            padding-left: 0px !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ------------------------------------------------------------------------------
 # 1. 공통 차트 렌더러 (Chart Component Functions)
