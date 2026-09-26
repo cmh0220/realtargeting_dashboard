@@ -42,7 +42,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 헤더 영역
-st.title("💡 서비스 이용 가이드")
+st.subheader("💡 서비스 이용 가이드")
 st.caption("리얼타겟팅 분석 솔루션을 효과적으로 활용하는 방법입니다.")
 st.divider()
 
@@ -77,7 +77,7 @@ with contact_col1:
         st.markdown("#### 💬 카카오톡 1:1 상담")
         sub_col1, sub_col2 = st.columns([1, 2])
         with sub_col1:
-            st.image("images/qr_카카오채널.png", use_container_width=True)
+            st.image("images/qr_카카오채널.png", use_container_width="stretch")
         with sub_col2:
             st.write("QR코드를 스캔하거나 아래 버튼을 클릭하여 상담을 시작하세요.")
             st.link_button("카카오톡 채널 바로가기", url_kakao, type="primary")

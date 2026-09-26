@@ -1,13 +1,39 @@
+import datetime
 from typing import Any, Dict, List
 import streamlit as st
 from streamlit_echarts import st_echarts
+import folium
+from streamlit_folium import st_folium
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
+
+# Helper 함수: YYYYMMDD -> YYYY-MM-DD
+def format_date_str(date_str):
+    if date_str and len(str(date_str)) == 8:
+        s = str(date_str)
+        return f"{s[:4]}-{s[4:6]}-{s[6:]}"
+    return date_str or "-"
+
+# Helper 함수: HH -> HH:00 또는 HHMM -> HH:MM
+def format_time_str(time_str):
+    if time_str:
+        s = str(time_str).zfill(2)
+        if len(s) == 2:
+            return f"{s}:00"
+        elif len(s) == 4:
+            return f"{s[:2]}:{s[2:]}"
+    return time_str or "-"
+
+# ------------------------------------------------------------------------------
+# Page CSS Customization
+# ------------------------------------------------------------------------------
 st.markdown(
     """
     <style>
         /* st.logo 이미지 컨테이너 크기 확대 */
         [data-testid="stSidebarHeader"] img {
-            height: 100px !important;   /* 원하는 높이로 조절 (기본 약 24~32px) */
+            height: 100px !important;   /* 원하는 높이로 조절 */
             width: auto !important;
             max-width: 100% !important;
         }
@@ -17,14 +43,131 @@ st.markdown(
             padding-bottom: 40px !important;
             padding-left: 0px !important;
         }
+
+        /* 💡 셀렉트박스 입력창 커서 숨김, 입력 차단 및 선택 불가 처리 */
+        div[data-baseweb="select"] input {
+            caret-color: transparent !important; /* 깜빡이는 커서 숨김 */
+            user-select: none !important;        /* 텍스트 드래그 및 선택 방지 */
+        }
+
+        /* 셀렉트박스 전체에 클릭만 허용하고 텍스트 커서 모양(I-beam) 방지 */
+        div[data-baseweb="select"] {
+            cursor: pointer !important;
+        }
+
+        div[data-baseweb="select"] * {
+            cursor: pointer !important;
+        }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
+
 # ------------------------------------------------------------------------------
 # 1. 공통 차트 렌더러 (Chart Component Functions)
 # ------------------------------------------------------------------------------
+def render_location_map(selected_work_info: Dict[str, Any]):
+    """왼쪽에는 측정 기본 정보 카드, 오른쪽(너비 50%)에는 지도를 배치합니다."""
+
+    # --------------------------------------------------------------------------
+    # 1. 컬럼 분할 (1:1 비율로 나눔 -> 우측 지도가 50% 너비 차지)
+    # --------------------------------------------------------------------------
+    col_info, col_map = st.columns([3, 2], gap="medium")
+
+    # --------------------------------------------------------------------------
+    # 2. [왼쪽 컬럼] 기본 정보 카드 렌더링
+    # --------------------------------------------------------------------------
+    with col_info:
+        start_date = format_date_str(selected_work_info.get("start_date"))
+        end_date = format_date_str(selected_work_info.get("end_date"))
+        start_time = format_time_str(selected_work_info.get("start_time"))
+        end_time = format_time_str(selected_work_info.get("end_time"))
+        address = selected_work_info.get("location") or selected_work_info.get("주소", "-")
+        memo = selected_work_info.get("memo") or f"지점 {selected_work_info.get('work_no')}"
+
+        # CSS 스타일링이 적용된 기본정보 박스
+        st.markdown(
+            f"""
+            <div style="
+                background-color: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 16px 20px;
+                height: 320px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            ">
+                <h4 style="margin-top: 0; margin-bottom: 12px; color: #1e293b; font-size: 17px; font-weight: bold;">
+                    📌 {memo}
+                </h4>
+                <p style="margin-bottom: 25px; color: #64748b; font-size: 13px; line-height: 1.4;">
+                    <b>     주소:</b> {address}
+                </p>
+                <hr style="margin: 8px 0 16px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                                <span style="font-size: 15px; color: #64748b; display: block;">📅 측정 시작일자</span>
+                                <span style="font-size: 15px; font-weight: 600; color: #0f172a; margin-left: 24px;">   {start_date}</span>
+                            </div>
+                            <div>
+                                <span style="font-size: 15px; color: #64748b; display: block;">📅 측정 종료일자</span>
+                                <span style="font-size: 15px; font-weight: 600; color: #0f172a; margin-left: 24px;">   {end_date}</span>
+                            </div>
+                            <div>
+                                <span style="font-size: 15px; color: #64748b; display: block;">⏰ 측정 시작시간</span>
+                                <span style="font-size: 15px; font-weight: 600; color: #2563eb; margin-left: 24px;">   {start_time}</span>
+                            </div>
+                            <div>
+                                <span style="font-size: 15px; color: #64748b; display: block;">⏰ 측정 종료시간</span>
+                                <span style="font-size: 15px; font-weight: 600; color: #2563eb; margin-left: 24px;">   {end_time}</span>
+                            </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # --------------------------------------------------------------------------
+    # 3. [오른쪽 컬럼] 지도 렌더링
+    # --------------------------------------------------------------------------
+    with col_map:
+        lat = selected_work_info.get("latitude")
+        lng = selected_work_info.get("longitude")
+
+        # 좌표 데이터 유효성 검증
+        if lat is None or lng is None:
+            st.info("ℹ️ 해당 측정지점에 등록된 위도/경도(latitude, longitude) 좌표 정보가 없습니다.")
+            return
+
+        try:
+            lat = float(lat)
+            lng = float(lng)
+        except (ValueError, TypeError):
+            st.warning("⚠️ 위도/경도 좌표 형식이 올바르지 않습니다.")
+            return
+
+        # Folium 지도 생성
+        m = folium.Map(location=[lat, lng], zoom_start=22)
+
+        # 핀 마커 추가
+        popup_text = f"<b>{memo}</b><br>{address}" if address else f"<b>{memo}</b>"
+        folium.Marker(
+            location=[lat, lng],
+            popup=folium.Popup(popup_text, max_width=300),
+            tooltip=memo,
+            icon=folium.Icon(color="blue", icon="info-sign"),
+        ).add_to(m)
+
+        # Streamlit 지도 렌더링 (col_map 내부에 위치하므로 전체 화면 기준 50% 영역 차지)
+        st_folium(
+            m,
+            width="100%",
+            height=320,
+            key=f"map_{selected_work_info.get('work_no')}",
+        )
+
 
 def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8):
     """상단 주요 지표 카드를 출력합니다."""
@@ -88,10 +231,7 @@ def render_chart_item(chart_info: Dict[str, Any]):
             height=300,
         )
 
-
-
     elif chart_type == "echarts_pie":
-
         # 1. 컬럼명 지정 (기본값 설정)
         name_col = chart_info.get("name_col", "name")
         val_col = chart_info.get("value_col", "cnt")
@@ -208,27 +348,64 @@ st.logo(
 conn = st.connection("mysql", type="sql")
 
 st.subheader("통합 대시보드", divider="blue")
-st.write(" ")
 
-user_id = st.session_state.get("id") or st.session_state.get("user_id")
-user_re = st.session_state.get("re") or st.session_state.get("user_re")
+# 인증 확인 및 로그인 계정의 전체 권한 지점 목록 가져오기
+user_id = st.session_state.get("user_id")
+work_list = st.session_state.get("work_list", [])  # 로그인 시 저장된 전체 지점 리스트 참조
 
-if not user_id or not user_re:
-    st.write("⚠️아이디 및 비밀번호를 확인하세요.")
+if not user_id or not work_list:
+    st.error("⚠️ 로그인 정보가 없거나 열람 가능한 지점이 없습니다. 사이드바에서 먼저 로그인해 주세요.")
 else:
-    variables1 = {"id": user_id, "re": user_re}
+    # --------------------------------------------------------------------------
+    # 상단 컨트롤러 (측정지점 선택 드롭다운)
+    # --------------------------------------------------------------------------
+    # 라벨 표시용 목록 (memo가 비어있으면 location 사용)
+    location_options = [w.get("memo") or w.get("location", f"지점 {w['work_no']}") for w in work_list]
+
+    # main.py 등에서 넘겨받은 단일 선택 지점 ID 확인
+    default_work_no = st.session_state.get("selected_work_no")
+    default_idx = 0
+
+    if default_work_no is not None:
+        for idx, item in enumerate(work_list):
+            if str(item["work_no"]) == str(default_work_no):
+                default_idx = idx
+                break
+
+    selected_location = st.selectbox(
+        "📍 측정지점 선택",
+        options=location_options,
+        index=default_idx,
+        key="sb_dashboard_location"
+    )
+
+    # 선택된 지명의 work_no 매핑
+    selected_work_info = work_list[location_options.index(selected_location)]
+    selected_work_no = selected_work_info["work_no"]
+
+    st.write(" ")
+
+    # 지도 표기
+    render_location_map(selected_work_info)
+    st.write(" ")
+
+    # DB 바인딩 파라미터 생성
+    variables1 = {
+        "id": user_id,
+        "work_no": selected_work_no,
+    }
 
     # --------------------------------------------------------------------------
     # A. Metric 상단 지표 조회 및 렌더링
     # --------------------------------------------------------------------------
-    qr_h1 = """SELECT sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 """
-    qr_h2 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 GROUP BY rca.collect_date) t1"""
-    qr_h3 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
-    qr_h4 = """SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
-    qr_h5 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekday_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_all rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday' GROUP BY rca.collect_date) t1"""
-    qr_h6 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekend_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_all rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' GROUP BY rca.collect_date) t1"""
-    qr_h7 = """SELECT avg(rca.stay_time) as stay_time FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 """
-    qr_h8 = """SELECT AVG(t1.hourly_avg_stay) as stay_time FROM (SELECT rca.collect_hour, AVG(rca.stay_time) AS hourly_avg_stay FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 GROUP BY rca.collect_hour) t1;"""
+    qr_h1 = """SELECT sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 """
+    qr_h2 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 GROUP BY rca.collect_date) t1"""
+    qr_h3 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
+    qr_h4 = """SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
+    qr_h5 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekday_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_all rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday' GROUP BY rca.collect_date) t1"""
+    qr_h6 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekend_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_all rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' GROUP BY rca.collect_date) t1"""
+    qr_h7 = """SELECT avg(rca.stay_time) as stay_time FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 """
+    qr_h8 = """SELECT AVG(t1.hourly_avg_stay) as stay_time FROM (SELECT rca.collect_hour, AVG(rca.stay_time) AS hourly_avg_stay FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 GROUP BY rca.collect_hour) t1;"""
 
     render_metric_cards(
         conn.query(qr_h1.format(**variables1), ttl=600),
@@ -247,7 +424,7 @@ else:
     # --------------------------------------------------------------------------
 
     # 1. 날짜별 통행량
-    qr1 = "SELECT DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') AS collect_date, SUM(rca.collect_cnt) AS cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') ORDER BY MIN(STR_TO_DATE(rca.collect_date, '%Y%m%d'));"
+    qr1 = "SELECT DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') AS collect_date, SUM(rca.collect_cnt) AS cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') ORDER BY MIN(STR_TO_DATE(rca.collect_date, '%Y%m%d'));"
     chart_date = {
         "chart_id": "date_traffic",
         "title": "일자별 통행량",
@@ -268,7 +445,7 @@ else:
             SELECT rca.collect_hour, rca.collect_date, SUM(rca.collect_cnt) AS cnt 
             FROM rt_collect_all rca 
             JOIN rt_calendar c ON rca.collect_date = c.dt 
-            WHERE rca.user_id = '{id}' AND rca.work_no = {re} 
+            WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} 
               AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
               AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday' 
             GROUP BY rca.collect_hour, rca.collect_date
@@ -284,7 +461,7 @@ else:
             SELECT rca.collect_hour, rca.collect_date, SUM(rca.collect_cnt) AS cnt 
             FROM rt_collect_all rca 
             JOIN rt_calendar c ON rca.collect_date = c.dt 
-            WHERE rca.user_id = '{id}' AND rca.work_no = {re} 
+            WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} 
               AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
               AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' 
             GROUP BY rca.collect_hour, rca.collect_date
@@ -305,7 +482,7 @@ else:
     }
 
     # 3. 요일/시간대별 통행량 및 체류시간 (멀티 라인)
-    qr2 = "SELECT t1.collect_hour, t1.collect_day, t1.collect_order, avg(t1.cnt) as cnt FROM (SELECT (CASE WHEN rca.collect_day = 'Sun' THEN '일' WHEN rca.collect_day = 'Mon' THEN '월' WHEN rca.collect_day = 'Tue' THEN '화' WHEN rca.collect_day = 'Wed' THEN '수' WHEN rca.collect_day = 'Thu' THEN '목' WHEN rca.collect_day = 'Fri' THEN '금' WHEN rca.collect_day = 'Sat' THEN '토' END) as collect_day, (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order, rca.collect_hour, rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order"
+    qr2 = "SELECT t1.collect_hour, t1.collect_day, t1.collect_order, avg(t1.cnt) as cnt FROM (SELECT (CASE WHEN rca.collect_day = 'Sun' THEN '일' WHEN rca.collect_day = 'Mon' THEN '월' WHEN rca.collect_day = 'Tue' THEN '화' WHEN rca.collect_day = 'Wed' THEN '수' WHEN rca.collect_day = 'Thu' THEN '목' WHEN rca.collect_day = 'Fri' THEN '금' WHEN rca.collect_day = 'Sat' THEN '토' END) as collect_day, (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order, rca.collect_hour, rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order"
     chart_day_hour = {
         "chart_id": "day_hour_traffic",
         "title": "요일별/시간대별 평균 통행량",
@@ -317,7 +494,7 @@ else:
         "y_name": "통행량",
     }
 
-    qr20 = "SELECT t1.collect_hour, t1.collect_day, t1.collect_order, round(avg(t1.stay_time), 1) as stay_time FROM (SELECT (CASE WHEN rca.collect_day = 'Sun' THEN '일' WHEN rca.collect_day = 'Mon' THEN '월' WHEN rca.collect_day = 'Tue' THEN '화' WHEN rca.collect_day = 'Wed' THEN '수' WHEN rca.collect_day = 'Thu' THEN '목' WHEN rca.collect_day = 'Fri' THEN '금' WHEN rca.collect_day = 'Sat' THEN '토' END) as collect_day, (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order, rca.collect_hour, rca.collect_date, avg(rca.stay_time) as stay_time FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 AND rca.stay_time <> 99999 GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order"
+    qr20 = "SELECT t1.collect_hour, t1.collect_day, t1.collect_order, round(avg(t1.stay_time), 1) as stay_time FROM (SELECT (CASE WHEN rca.collect_day = 'Sun' THEN '일' WHEN rca.collect_day = 'Mon' THEN '월' WHEN rca.collect_day = 'Tue' THEN '화' WHEN rca.collect_day = 'Wed' THEN '수' WHEN rca.collect_day = 'Thu' THEN '목' WHEN rca.collect_day = 'Fri' THEN '금' WHEN rca.collect_day = 'Sat' THEN '토' END) as collect_day, (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order, rca.collect_hour, rca.collect_date, avg(rca.stay_time) as stay_time FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 AND rca.stay_time <> 99999 GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order"
     chart_day_hour_stay_time = {
         "chart_id": "day_hour_stay",
         "title": "요일별/시간대별 평균 체류시간",
@@ -330,7 +507,7 @@ else:
     }
 
     # 4. 성별 차트
-    qr21 = "SELECT (CASE WHEN substring(rca.class,1,1) = 'm' THEN '남성' WHEN substring(rca.class,1,1) = 'w' THEN '여성' END) as gender, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY (CASE WHEN substring(rca.class,1,1) = 'm' THEN '남성' WHEN substring(rca.class,1,1) = 'w' THEN '여성' END)"
+    qr21 = "SELECT (CASE WHEN substring(rca.class,1,1) = 'm' THEN '남성' WHEN substring(rca.class,1,1) = 'w' THEN '여성' END) as gender, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY (CASE WHEN substring(rca.class,1,1) = 'm' THEN '남성' WHEN substring(rca.class,1,1) = 'w' THEN '여성' END)"
     # chart_gender = {
     #     "chart_id": "gender_ratio",
     #     "title": "성별 통행량",
@@ -364,7 +541,7 @@ else:
                 SUM(rca.collect_cnt) AS cnt
             FROM rt_collect_all rca 
             WHERE rca.user_id = '{id}' 
-              AND rca.work_no = {re} 
+              AND rca.work_no = {work_no} 
               AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
               AND rca.del_yn = 0 
             GROUP BY rca.collect_hour, SUBSTRING(rca.class, 1, 1), rca.collect_date
@@ -385,7 +562,7 @@ else:
     }
 
     # 5. 연령별 차트
-    qr23 = "SELECT (CASE WHEN t1.age = '01' THEN '10대 이하' WHEN t1.age = '23' THEN '20~30대' WHEN t1.age = '45' THEN '40~50대' WHEN t1.age = '67' THEN '60대 이상' END) as age, (CASE WHEN t1.age = '01' THEN 1 WHEN t1.age = '23' THEN 2 WHEN t1.age = '45' THEN 3 WHEN t1.age = '67' THEN 4 END) as age_order, sum(t1.cnt) as cnt FROM (SELECT substring(rca.class, 2, 2) as age, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY substring(rca.class, 2, 2) UNION ALL SELECT age, cnt FROM rt_dummy_age) t1 GROUP BY t1.age ORDER BY age_order"
+    qr23 = "SELECT (CASE WHEN t1.age = '01' THEN '10대 이하' WHEN t1.age = '23' THEN '20~30대' WHEN t1.age = '45' THEN '40~50대' WHEN t1.age = '67' THEN '60대 이상' END) as age, (CASE WHEN t1.age = '01' THEN 1 WHEN t1.age = '23' THEN 2 WHEN t1.age = '45' THEN 3 WHEN t1.age = '67' THEN 4 END) as age_order, sum(t1.cnt) as cnt FROM (SELECT substring(rca.class, 2, 2) as age, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY substring(rca.class, 2, 2) UNION ALL SELECT age, cnt FROM rt_dummy_age) t1 GROUP BY t1.age ORDER BY age_order"
     # chart_age = {
     #     "chart_id": "age_ratio",
     #     "title": "연령별 통행량",
@@ -403,7 +580,7 @@ else:
         "semi_pie": "down"
     }
 
-    qr24 = "SELECT t1.collect_hour as hour, (CASE WHEN t1.age = '01' THEN '10대 이하' WHEN t1.age = '23' THEN '20~30대' WHEN t1.age = '45' THEN '40~50대' WHEN t1.age = '67' THEN '60대 이상' END) as age, sum(t1.cnt) as cnt FROM (SELECT rca.collect_hour as collect_hour, substring(rca.class, 2, 2) as age, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') and rca.del_yn = 0 GROUP BY rca.collect_hour, substring(rca.class, 2, 2)) t1 GROUP BY t1.collect_hour, t1.age"
+    qr24 = "SELECT t1.collect_hour as hour, (CASE WHEN t1.age = '01' THEN '10대 이하' WHEN t1.age = '23' THEN '20~30대' WHEN t1.age = '45' THEN '40~50대' WHEN t1.age = '67' THEN '60대 이상' END) as age, sum(t1.cnt) as cnt FROM (SELECT rca.collect_hour as collect_hour, substring(rca.class, 2, 2) as age, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') and rca.del_yn = 0 GROUP BY rca.collect_hour, substring(rca.class, 2, 2)) t1 GROUP BY t1.collect_hour, t1.age"
     chart_age_hour = {
         "chart_id": "age_hour",
         "title": "연령별(시간대) 평균 통행량",
@@ -416,7 +593,7 @@ else:
     }
 
     # 6. 방향별 차트
-    qr31 = "SELECT rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.direction"
+    qr31 = "SELECT rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.direction"
     # chart_dir = {
     #     "chart_id": "dir_bar",
     #     "title": "방향별 통행량",
@@ -445,7 +622,7 @@ else:
         "semi_pie": "up"
     }
 
-    qr32 = "SELECT rca.collect_hour as collect_hour, rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {re} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_hour, rca.direction"
+    qr32 = "SELECT rca.collect_hour as collect_hour, rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_hour, rca.direction"
     chart_dir_hour = {
         "chart_id": "dir_hour",
         "title": "방향별(시간대) 평균 통행량",
