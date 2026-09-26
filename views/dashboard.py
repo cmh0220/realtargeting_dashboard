@@ -212,14 +212,64 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
     # 1. 기본 Streamlit 차트
     if chart_type == "bar":
-        st.bar_chart(
-            df,
-            x=chart_info.get("x"),
-            y=chart_info.get("y"),
-            x_label=chart_info.get("x_label", ""),
-            y_label=chart_info.get("y_label", ""),
-            height=300,
-        )
+        x_col = chart_info.get("x")
+        y_col = chart_info.get("y")
+        x_label = chart_info.get("x_label", "")
+        y_label = chart_info.get("y_label", "")
+
+        # DataFrame에서 X축 카테고리 데이터 및 Y축 시리즈 데이터 추출
+        x_data = df[x_col].astype(str).tolist() if x_col and x_col in df.columns else []
+
+        # y_col이 단일 컬럼명(str)이거나 여러 컬럼명(list)인 경우 모두 대응
+        if isinstance(y_col, list):
+            series_data = [
+                {
+                    "name": col,
+                    "type": "bar",
+                    "data": df[col].tolist()
+                }
+                for col in y_col if col in df.columns
+            ]
+        else:
+            series_data = [
+                {
+                    "name": y_col or "",
+                    "type": "bar",
+                    "data": df[y_col].tolist() if y_col and y_col in df.columns else []
+                }
+            ]
+
+        # ECharts Options 설정
+        options = {
+            "tooltip": {
+                "trigger": "axis",
+                "axisPointer": {"type": "shadow"}
+            },
+            "legend": {
+                "show": True if isinstance(y_col, list) and len(y_col) > 1 else False
+            },
+            "grid": {
+                "left": "3%",
+                "right": "4%",
+                "bottom": "3%",
+                "containLabel": True
+            },
+            "xAxis": {
+                "type": "category",
+                "data": x_data,
+                "name": x_label,
+                "nameLocation": "middle",
+                "nameGap": 30
+            },
+            "yAxis": {
+                "type": "value",
+                "name": y_label
+            },
+            "series": series_data
+        }
+
+        # EChart 렌더링
+        st_echarts(options=options, height="300px")
     elif chart_type == "area":
         st.area_chart(
             df,
