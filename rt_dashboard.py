@@ -66,7 +66,7 @@ def authenticate_user(user_id: str, password_raw: str) -> dict:
         )
 
         if user_df.empty:
-            return {"success": False, "msg": "아이디 혹은 비밀번호가 올바르지 않습니다."}
+            return {"success": False, "msg": "아이디[E-mail] 혹은 비밀번호가 올바르지 않습니다."}
 
         user_info = user_df.iloc[0].to_dict()
 
@@ -152,7 +152,7 @@ def handle_submit():
     input_pw = st.session_state.get("input_pw_val")
 
     if not input_id or not input_pw:
-        st.toast("⚠️ 아이디 및 비밀번호를 입력하세요.")
+        st.toast("⚠️ 아이디[E-mail] 및 비밀번호를 입력하세요.")
         return
 
     result = authenticate_user(input_id, str(input_pw))
@@ -243,7 +243,7 @@ with st.sidebar:
                 new_pw = st.text_input("새 비밀번호", type="password")
                 new_pw_confirm = st.text_input("비밀번호 확인", type="password")
                 pw_submit = st.form_submit_button(
-                    "비밀번호 변경", use_container_width="stretch"
+                    "비밀번호 변경", width="stretch"
                 )
 
                 if pw_submit:
@@ -264,19 +264,19 @@ with st.sidebar:
         st.button(
             "🚪 로그아웃",
             on_click=myclear,
-            use_container_width="stretch",
+            width="stretch",
             type="secondary",
         )
     # 2. 미인증 상태 UI (로그인 폼)
     else:
         with st.form(key="login_form", clear_on_submit=False):
-            st.text_input("🆔 아이디", key="input_id_val")
+            st.text_input("🆔 아이디[E-mail]", key="input_id_val")
             st.text_input("🔑 비밀번호", type="password", key="input_pw_val")
 
             st.form_submit_button(
                 "로그인",
                 on_click=handle_submit,
-                use_container_width="stretch",
+                width="stretch",
             )
 
 

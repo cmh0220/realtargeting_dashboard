@@ -52,7 +52,7 @@ col1, col2 = st.columns([1.2, 0.8], gap="medium")
 with col1:
     st.subheader("📌 이용 방법")
     st.info("""
-    **Step 1.** 좌측 사이드바에 전달받으신 [아이디]와 [비밀번호]를 입력 후 [적용]을 클릭하세요.  
+    **Step 1.** 좌측 사이드바에 아이디[E-mail]와 안내받으신 비밀번호를 입력 후 [적용]을 클릭하세요.  
     **Step 2.** 조회할 분석 메뉴를 선택하여 데이터를 확인합니다.
     """)
 
@@ -61,7 +61,7 @@ with col2:
     st.warning("""
     서비스를 미리 체험해보고 싶다면 아래 테스트 계정을 입력해보세요.
 
-    * **아이디**: `real`
+    * **아이디**: `realtargeting`
     * **등록번호**: `12345678`
     """)
 
@@ -77,7 +77,7 @@ with contact_col1:
         st.markdown("#### 💬 카카오톡 1:1 상담")
         sub_col1, sub_col2 = st.columns([1, 2])
         with sub_col1:
-            st.image("images/qr_카카오채널.png", use_container_width="stretch")
+            st.image("images/qr_카카오채널.png", width="stretch")
         with sub_col2:
             st.write("QR코드를 스캔하거나 아래 버튼을 클릭하여 상담을 시작하세요.")
             st.link_button("카카오톡 채널 바로가기", url_kakao, type="primary")

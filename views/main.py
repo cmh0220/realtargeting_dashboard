@@ -93,7 +93,7 @@ user_id = st.session_state.get("user_id")
 if not user_id:
     # 1. 미로그인 상태
     st.image(
-        "images/technology-7111760_1920.jpg", use_container_width="stretch"
+        "images/technology-7111760_1920.jpg", width="stretch"
     )
     st.info(
         "👋 좌측 사이드바에서 로그인 후 측정지점 리스트 및 통행량 분석 정보를 확인하세요."
@@ -159,7 +159,7 @@ else:
             btn_daily = st.button(
                 "📈 일일 모니터링",
                 disabled=not is_single_valid,
-                use_container_width="stretch",
+                width="stretch",
                 type="primary" if is_single_valid else "secondary",
             )
 
@@ -167,7 +167,7 @@ else:
             btn_dashboard = st.button(
                 "📊 통합 대시보드",
                 disabled=not is_single_valid,
-                use_container_width="stretch",
+                width="stretch",
                 type="primary" if is_single_valid else "secondary",
             )
 
@@ -175,7 +175,7 @@ else:
             btn_multi = st.button(
                 f"🔀 다중 분석 ({selected_count}/4)",
                 disabled=not is_multi_valid,
-                use_container_width="stretch",
+                width="stretch",
                 type="primary" if is_multi_valid else "secondary",
             )
 
@@ -194,7 +194,7 @@ else:
         # --- [2. 측정지점 리스트 테이블] ---
         st.dataframe(
             filtered_df,
-            use_container_width="stretch",
+            width="stretch",
             hide_index=True,
             height=300,
             on_select="rerun",
