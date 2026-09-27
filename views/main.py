@@ -22,6 +22,27 @@ st.markdown(
     [data-testid="stElementToolbar"] {
         display: none !important;
     }
+    /* 1. Canvas 기반 테이블 헤더(컬럼 제목) 가운데 정렬 */
+    div[data-testid="stDataFrame"] [role="columnheader"] {
+        justify-content: center !important;
+        text-align: center !important;
+    }
+    
+    /* 2. 일반 HTML Table 헤더 대응 */
+    div[data-testid="stDataFrame"] th {
+        text-align: center !important;
+    }
+
+    /* 3. Canvas 기반 데이터 셀(내용) 가운데 정렬 */
+    div[data-testid="stDataFrame"] [role="gridcell"] {
+        justify-content: center !important;
+        text-align: center !important;
+    }
+
+    /* 4. 일반 HTML Table 데이터 셀 대응 */
+    div[data-testid="stDataFrame"] td {
+        text-align: center !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -35,19 +56,19 @@ def get_collect_info_list(user_id: str):
         if user_id in ["notreal", "admin"]:
             query = text("""
                 SELECT 
-                    work_no,
-                    memo,
-                    location,
-                    device_no,
-                    status,
-                    start_date,
-                    end_date,
-                    view_start_date,
-                    view_end_date,
-                    start_time,
-                    end_time,
-                    latitude,
-                    longitude                     
+                    work_no as '작업번호',
+                    memo as '측정지점',
+                    location as '주소',
+                    device_no as '장비번호',
+                    status as '진행상태',
+                    start_date as '시작일자',
+                    end_date as '종료일자',
+                    view_start_date as '열람시작일자',
+                    view_end_date as '열람종료일자',
+                    start_time as '시작시간',
+                    end_time as '종료시간', 
+                    latitude as '위도',
+                    longitude as '경도'                    
                 FROM rt_collect_info
                 ORDER BY work_no DESC
             """)
@@ -55,19 +76,16 @@ def get_collect_info_list(user_id: str):
         else:
             query = text("""
                 SELECT 
-                    work_no,
-                    memo,
-                    location,
-                    device_no,
-                    status,
-                    start_date,
-                    end_date,
-                    view_start_date,
-                    view_end_date,
-                    start_time,
-                    end_time,
-                    latitude,
-                    longitude 
+                    work_no as '작업번호',
+                    memo as '측정지점',
+                    location as '주소',                    
+                    status as '진행상태',
+                    start_date as '시작일자',
+                    end_date as '종료일자',                    
+                    start_time as '시작시간',
+                    end_time as '종료시간', 
+                    latitude as '위도',
+                    longitude as '경도' 
                 FROM rt_collect_info
                 WHERE user_id = :user_id
                   AND view_yn = 1
@@ -118,7 +136,7 @@ else:
         total_cnt = len(df_info)
 
         # 💡 'status' 또는 '상태' 컬럼 모두 대응 가능하도록 안전하게 체크
-        status_col = "status" if "status" in df_info.columns else ("상태" if "상태" in df_info.columns else None)
+        status_col = "status" if "status" in df_info.columns else ("진행상태" if "진행상태" in df_info.columns else None)
 
         if status_col:
             active_cnt = len(df_info[df_info[status_col] == "완료"])
@@ -183,13 +201,18 @@ else:
         filtered_df = df_info.copy()
         if search_kw:
             filtered_df = filtered_df[
-                filtered_df["memo"]
+                filtered_df["측정지점"]
                 .astype(str)
                 .str.contains(search_kw, case=False, na=False)
                 | filtered_df["주소"]
                 .astype(str)
                 .str.contains(search_kw, case=False, na=False)
             ]
+
+        column_config = {
+            col: st.column_config.Column(alignment="center")
+            for col in filtered_df.columns
+        }
 
         # --- [2. 측정지점 리스트 테이블] ---
         st.dataframe(
@@ -200,6 +223,7 @@ else:
             on_select="rerun",
             selection_mode=["multi-row"],
             key="collect_table_selection",
+            column_config=column_config,
         )
 
         # --- [3. 페이지 이동 및 데이터 전달 로직] ---
@@ -208,14 +232,14 @@ else:
             selected_row_data = filtered_df.iloc[selected_rows[0]]
 
             # 단일 선택된 지점의 work_no 및 memo/location 저장
-            st.session_state["selected_work_no"] = selected_row_data["work_no"]
-            st.session_state["selected_location"] = selected_row_data.get("memo", selected_row_data.get("주소", ""))
-            st.session_state["selected_start_date"] = selected_row_data["start_date"]
-            st.session_state["selected_end_date"] = selected_row_data["end_date"]
-            st.session_state["selected_start_time"] = selected_row_data["start_time"]
-            st.session_state["selected_end_time"] = selected_row_data["end_time"]
-            st.session_state["selected_latitude"] = selected_row_data["latitude"]
-            st.session_state["selected_longitude"] = selected_row_data["longitude"]
+            st.session_state["selected_work_no"] = selected_row_data["작업번호"]
+            st.session_state["selected_location"] = selected_row_data.get("측정지점", selected_row_data.get("주소", ""))
+            st.session_state["selected_start_date"] = selected_row_data["시작일자"]
+            st.session_state["selected_end_date"] = selected_row_data["종료일자"]
+            st.session_state["selected_start_time"] = selected_row_data["시작시간"]
+            st.session_state["selected_end_time"] = selected_row_data["종료시간"]
+            st.session_state["selected_latitude"] = selected_row_data["위도"]
+            st.session_state["selected_longitude"] = selected_row_data["경도"]
 
             if btn_daily:
                 st.switch_page("views/today.py")
@@ -224,9 +248,9 @@ else:
 
         if btn_multi:
             selected_data = filtered_df.iloc[selected_rows]
-            st.session_state["selected_work_nos"] = selected_data["work_no"].tolist()
-            st.session_state["selected_locations"] = selected_data[
-                "memo"].tolist() if "memo" in selected_data.columns else []
+            st.session_state["selected_work_nos"] = selected_data["작업번호"].tolist()
+            st.session_state["selected_memos"] = selected_data[
+                "측정지점"].tolist() if "측정지점" in selected_data.columns else []
             st.switch_page("views/multi_analysis.py")
 
 # 하단 푸터

@@ -7,12 +7,14 @@ from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
+
 # Helper 함수: YYYYMMDD -> YYYY-MM-DD
 def format_date_str(date_str):
     if date_str and len(str(date_str)) == 8:
         s = str(date_str)
         return f"{s[:4]}-{s[4:6]}-{s[6:]}"
     return date_str or "-"
+
 
 # Helper 함수: HH -> HH:00 또는 HHMM -> HH:MM
 def format_time_str(time_str):
@@ -23,6 +25,7 @@ def format_time_str(time_str):
         elif len(s) == 4:
             return f"{s[:2]}:{s[2:]}"
     return time_str or "-"
+
 
 # ------------------------------------------------------------------------------
 # Page CSS Customization
@@ -43,18 +46,13 @@ st.markdown(
             padding-left: 0px !important;
         }
 
-        /* 💡 셀렉트박스 입력창 커서 숨김, 입력 차단 및 선택 불가 처리 */
+        /* 셀렉트박스 입력창 커서 숨김, 입력 차단 및 선택 불가 처리 */
         div[data-baseweb="select"] input {
-            caret-color: transparent !important; /* 깜빡이는 커서 숨김 */
-            user-select: none !important;        /* 텍스트 드래그 및 선택 방지 */
+            caret-color: transparent !important;
+            user-select: none !important;
         }
-        
-        /* 셀렉트박스 전체에 클릭만 허용하고 텍스트 커서 모양(I-beam) 방지 */
-        div[data-baseweb="select"] {
-            cursor: pointer !important;
-        }
-        
-        div[data-baseweb="select"] * {
+
+        div[data-baseweb="select"], div[data-baseweb="select"] * {
             cursor: pointer !important;
         }
     </style>
@@ -62,81 +60,72 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # ------------------------------------------------------------------------------
 # 1. 공통 차트 렌더러 (Chart Component Functions)
 # ------------------------------------------------------------------------------
 def render_location_map(selected_work_info: Dict[str, Any]):
     """왼쪽에는 측정 기본 정보 카드, 오른쪽(너비 50%)에는 지도를 배치합니다."""
 
-    # --------------------------------------------------------------------------
-    # 1. 컬럼 분할 (1:1 비율로 나눔 -> 우측 지도가 50% 너비 차지)
-    # --------------------------------------------------------------------------
     col_info, col_map = st.columns([3, 2], gap="medium")
 
-    # --------------------------------------------------------------------------
-    # 2. [왼쪽 컬럼] 기본 정보 카드 렌더링
-    # --------------------------------------------------------------------------
     with col_info:
-        start_date = format_date_str(selected_work_info.get("start_date"))
-        end_date = format_date_str(selected_work_info.get("end_date"))
-        start_time = format_time_str(selected_work_info.get("start_time"))
-        end_time = format_time_str(selected_work_info.get("end_time"))
-        address = selected_work_info.get("location") or selected_work_info.get("주소", "-")
-        memo = selected_work_info.get("memo") or f"지점 {selected_work_info.get('work_no')}"
+        start_date = format_date_str(selected_work_info.get("시작일자") or selected_work_info.get("start_date"))
+        end_date = format_date_str(selected_work_info.get("종료일자") or selected_work_info.get("end_date"))
+        start_time = format_time_str(selected_work_info.get("시작시간") or selected_work_info.get("start_time"))
+        end_time = format_time_str(selected_work_info.get("종료시간") or selected_work_info.get("end_time"))
+        address = selected_work_info.get("주소") or selected_work_info.get("location", "-")
+        memo = selected_work_info.get("측정지점") or selected_work_info.get(
+            "memo") or f"지점 {selected_work_info.get('작업번호') or selected_work_info.get('work_no')}"
 
-        # CSS 스타일링이 적용된 기본정보 박스
         st.markdown(
             f"""
-                    <div style="
-                        background-color: #f8f9fa;
-                        border: 1px solid #e9ecef;
-                        border-radius: 8px;
-                        padding: 16px 20px;
-                        height: 320px;
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: center;
-                    ">
-                        <h4 style="margin-top: 0; margin-bottom: 12px; color: #1e293b; font-size: 17px; font-weight: bold;">
-                            📌 {memo}
-                        </h4>
-                        <p style="margin-bottom: 25px; color: #64748b; font-size: 13px; line-height: 1.4;">
-                            <b>     주소:</b> {address}
-                        </p>
-                        <hr style="margin: 8px 0 16px 0; border: none; border-top: 1px solid #e2e8f0;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                            <div>
-                                <span style="font-size: 15px; color: #64748b; display: block;">📅 측정 시작일자</span>
-                                <span style="font-size: 15px; font-weight: 600; color: #0f172a; margin-left: 24px;">   {start_date}</span>
-                            </div>
-                            <div>
-                                <span style="font-size: 15px; color: #64748b; display: block;">📅 측정 종료일자</span>
-                                <span style="font-size: 15px; font-weight: 600; color: #0f172a; margin-left: 24px;">   {end_date}</span>
-                            </div>
-                            <div>
-                                <span style="font-size: 15px; color: #64748b; display: block;">⏰ 측정 시작시간</span>
-                                <span style="font-size: 15px; font-weight: 600; color: #2563eb; margin-left: 24px;">   {start_time}</span>
-                            </div>
-                            <div>
-                                <span style="font-size: 15px; color: #64748b; display: block;">⏰ 측정 종료시간</span>
-                                <span style="font-size: 15px; font-weight: 600; color: #2563eb; margin-left: 24px;">   {end_time}</span>
-                            </div>
-                        </div>
+            <div style="
+                background-color: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 16px 20px;
+                height: 320px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            ">
+                <h4 style="margin-top: 0; margin-bottom: 12px; color: #1e293b; font-size: 17px; font-weight: bold;">
+                    📌 {memo}
+                </h4>
+                <p style="margin-bottom: 25px; color: #64748b; font-size: 13px; line-height: 1.4;">
+                    <b>주소:</b> {address}
+                </p>
+                <hr style="margin: 8px 0 16px 0; border: none; border-top: 1px solid #e2e8f0;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div>
+                        <span style="font-size: 15px; color: #64748b; display: block;">📅 측정 시작일자</span>
+                        <span style="font-size: 15px; font-weight: 600; color: #0f172a; margin-left: 24px;">{start_date}</span>
                     </div>
-                    """,
+                    <div>
+                        <span style="font-size: 15px; color: #64748b; display: block;">📅 측정 종료일자</span>
+                        <span style="font-size: 15px; font-weight: 600; color: #0f172a; margin-left: 24px;">{end_date}</span>
+                    </div>
+                    <div>
+                        <span style="font-size: 15px; color: #64748b; display: block;">⏰ 측정 시작시간</span>
+                        <span style="font-size: 15px; font-weight: 600; color: #2563eb; margin-left: 24px;">{start_time}</span>
+                    </div>
+                    <div>
+                        <span style="font-size: 15px; color: #64748b; display: block;">⏰ 측정 종료시간</span>
+                        <span style="font-size: 15px; font-weight: 600; color: #2563eb; margin-left: 24px;">{end_time}</span>
+                    </div>
+                </div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
 
-    # --------------------------------------------------------------------------
-    # 3. [오른쪽 컬럼] 지도 렌더링
-    # --------------------------------------------------------------------------
     with col_map:
-        lat = selected_work_info.get("latitude")
-        lng = selected_work_info.get("longitude")
+        lat = selected_work_info.get("위도") or selected_work_info.get("latitude")
+        lng = selected_work_info.get("경도") or selected_work_info.get("longitude")
 
-        # 좌표 데이터 유효성 검증
         if lat is None or lng is None:
-            st.info("ℹ️ 해당 측정지점에 등록된 위도/경도(latitude, longitude) 좌표 정보가 없습니다.")
+            st.info("ℹ️ 해당 측정지점에 등록된 위도/경도 좌표 정보가 없습니다.")
             return
 
         try:
@@ -146,10 +135,8 @@ def render_location_map(selected_work_info: Dict[str, Any]):
             st.warning("⚠️ 위도/경도 좌표 형식이 올바르지 않습니다.")
             return
 
-        # Folium 지도 생성
-        m = folium.Map(location=[lat, lng], zoom_start=22)
+        m = folium.Map(location=[lat, lng], zoom_start=17)
 
-        # 핀 마커 추가
         popup_text = f"<b>{memo}</b><br>{address}" if address else f"<b>{memo}</b>"
         folium.Marker(
             location=[lat, lng],
@@ -158,13 +145,13 @@ def render_location_map(selected_work_info: Dict[str, Any]):
             icon=folium.Icon(color="blue", icon="info-sign"),
         ).add_to(m)
 
-        # Streamlit 지도 렌더링 (col_map 내부에 위치하므로 전체 화면 기준 50% 영역 차지)
         st_folium(
             m,
             width="100%",
             height=320,
-            key=f"map_{selected_work_info.get('work_no')}",
+            key=f"map_{selected_work_info.get('작업번호') or selected_work_info.get('work_no')}",
         )
+
 
 def render_metric_cards(df_h2, df_h3, df_h4, df_h7):
     """상단 주요 지표 카드를 출력합니다."""
@@ -301,13 +288,13 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
 
 def render_chart_grid(
-    charts: List[Dict[str, Any]],
-    cols_per_row: int = 3,
-    ratios: List[float] = None,
+        charts: List[Dict[str, Any]],
+        cols_per_row: int = 3,
+        ratios: List[float] = None,
 ):
     """차트 리스트를 받아 지정한 열 개수나 비율에 맞춰 그리드로 배치합니다."""
     for i in range(0, len(charts), cols_per_row):
-        row_charts = charts[i : i + cols_per_row]
+        row_charts = charts[i: i + cols_per_row]
         cols = st.columns(
             ratios if ratios and len(ratios) == len(row_charts) else len(row_charts),
             vertical_alignment="bottom",
@@ -329,28 +316,34 @@ st.subheader("일일 모니터링", divider="blue")
 
 # 인증 확인 및 로그인 계정의 전체 권한 지점 목록 가져오기
 user_id = st.session_state.get("user_id")
-work_list = st.session_state.get("work_list", [])  # 로그인 시 저장된 전체 지점 리스트 참조
+work_list = st.session_state.get("work_list", [])
 
 if not user_id or not work_list:
     st.error("⚠️ 로그인 정보가 없거나 열람 가능한 지점이 없습니다. 사이드바에서 먼저 로그인해 주세요.")
+    st.stop()
 else:
-    # --------------------------------------------------------------------------
-    # 상단 컨트롤러 (측정지점 선택 드롭다운 + 조회일자 선택)
-    # --------------------------------------------------------------------------
-    ctrl_col1, ctrl_col2 = st.columns([3, 2])
 
-    # 라벨 표시용 목록 (memo가 비어있으면 location 사용)
-    location_options = [w.get("memo") or w.get("location", f"지점 {w['work_no']}") for w in work_list]
-
-    # main.py에서 넘겨받은 단일 선택 지점 ID 확인
+    # 1. 메인 화면에서 전달된 기본 선택 지점(work_no) 확인
     default_work_no = st.session_state.get("selected_work_no")
-    default_idx = 0
 
+    # 2. 셀렉트박스 옵션 구성 (한글/영문 Key 호환 대응)
+    location_options = [
+        item.get("측정지점") or item.get("memo") or item.get("주소") or item.get(
+            "location") or f"지점 {item.get('작업번호', item.get('work_no'))}"
+        for item in work_list
+    ]
+
+    # 3. default_idx 계산
+    default_idx = 0
     if default_work_no is not None:
         for idx, item in enumerate(work_list):
-            if str(item["work_no"]) == str(default_work_no):
+            item_work_no = item.get("작업번호") or item.get("work_no")
+            if str(item_work_no) == str(default_work_no):
                 default_idx = idx
                 break
+
+    # 4. 상단 컨트롤러 레이아웃 (지점 선택 + 날짜 선택)
+    ctrl_col1, ctrl_col2 = st.columns([3, 2])
 
     with ctrl_col1:
         selected_location = st.selectbox(
@@ -360,14 +353,6 @@ else:
             key="sb_monitoring_location"
         )
 
-    # 선택된 지명의 work_no 매핑
-    selected_work_info = work_list[location_options.index(selected_location)]
-    selected_work_no = selected_work_info["work_no"]
-
-    # 지도 표기
-    render_location_map(selected_work_info)
-    st.write(" ")
-
     with ctrl_col2:
         cond_date = st.date_input(
             "📆 조회일자 선택",
@@ -375,23 +360,55 @@ else:
             min_value=datetime.date(2024, 7, 1)
         )
 
-    target_date_str = cond_date.strftime("%Y%m%d")
+    # 5. 선택된 지점 상세 데이터 추출
+    selected_work_info = work_list[location_options.index(selected_location)]
+    selected_work_no = selected_work_info.get("작업번호") or selected_work_info.get("work_no")
+
+    # 세션 정보 최신화
+    st.session_state["selected_work_no"] = selected_work_no
+    start_date_raw = format_date_str(selected_work_info.get("시작일자") or selected_work_info.get("start_date"))
+    end_date_raw = format_date_str(selected_work_info.get("종료일자") or selected_work_info.get("end_date"))
+    start_time_raw = format_time_str(selected_work_info.get("시작시간") or selected_work_info.get("start_time"))
+    end_time_raw = format_time_str(selected_work_info.get("종료시간") or selected_work_info.get("end_time"))
+
+    # 1. 날짜에서 '-' 제거하여 YYYYMMDD 형태로 변환
+    start_date_str = str(start_date_raw).replace("-", "").strip()
+    end_date_str = str(end_date_raw).replace("-", "").strip()
+
+    # 2. 시간에서 ':'를 제거하고 HH (시) 2자리만 추출
+    start_time_clean = str(start_time_raw).replace(":", "").strip()
+    end_time_clean = str(end_time_raw).replace(":", "").strip()
+
+    start_time_str = start_time_clean[:2].zfill(2) if start_time_clean else ""
+    end_time_str = end_time_clean[:2].zfill(2) if end_time_clean else ""
+
+    # 6. 기본정보 및 지도 표시
+    render_location_map(selected_work_info)
     st.write(" ")
+
+    target_date_str = cond_date.strftime("%Y%m%d")
 
     # DB 바인딩 파라미터 생성
     variables = {
         "id": user_id,
         "work_no": selected_work_no,
         "today": target_date_str,
+        "start_date_str": start_date_str,
+        "end_date_str": end_date_str,
+        "start_time_str": start_time_str,
+        "end_time_str": end_time_str,
     }
 
     # --------------------------------------------------------------------------
     # A. Metric 상단 지표 조회 및 렌더링
     # --------------------------------------------------------------------------
-    qr_h2 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.collect_date = '{today}' and rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 GROUP BY rca.collect_date) t1"""
-    qr_h3 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.collect_date = '{today}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
-    qr_h4 = """SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.collect_date = '{today}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
-    qr_h7 = """SELECT avg(rca.stay_time) as stay_time FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.collect_date = '{today}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 """
+    qr_h2 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = '{work_no}' AND rca.collect_date = '{today}' and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' and rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 GROUP BY rca.collect_date) t1"""
+
+    qr_h3 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.collect_date = '{today}' and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
+
+    qr_h4 = """SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.collect_date = '{today}' and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
+
+    qr_h7 = """SELECT avg(rca.stay_time) as stay_time FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.collect_date = '{today}' AND rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' and (rca.class like 'm%' OR rca.class like 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 """
 
     render_metric_cards(
         conn.query(qr_h2.format(**variables), ttl=600),
@@ -416,8 +433,10 @@ else:
                 WHERE rca.user_id = '{id}'
                   AND rca.work_no = {work_no}
                   AND rca.collect_date = '{today}'
+                  and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
                   AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
                   AND rca.del_yn = 0
+                  AND rca.stay_time <> 99999
                 GROUP BY rca.collect_hour, rca.collect_date
             ) t1
             GROUP BY t1.collect_hour
@@ -459,6 +478,7 @@ else:
         WHERE rca.user_id = '{id}' 
           AND rca.work_no = {work_no} 
           AND rca.collect_date = '{today}'
+          and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
           AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
           AND rca.del_yn = 0 
         GROUP BY (CASE WHEN SUBSTRING(rca.class, 1, 1) = 'm' THEN '남성' 
@@ -486,6 +506,7 @@ else:
         WHERE rca.user_id = '{id}' 
           AND rca.work_no = {work_no} 
           AND rca.collect_date = '{today}'
+          and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
           AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
           AND rca.del_yn = 0 
         GROUP BY rca.collect_hour, SUBSTRING(rca.class, 1, 1)
@@ -515,6 +536,7 @@ else:
         WHERE rca.user_id = '{id}' 
           AND rca.work_no = {work_no} 
           AND rca.collect_date = '{today}'
+          and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
           AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
           AND rca.del_yn = 0 
         GROUP BY SUBSTRING(rca.class, 2, 2)
@@ -542,6 +564,7 @@ else:
         WHERE rca.user_id = '{id}' 
           AND rca.work_no = {work_no} 
           AND rca.collect_date = '{today}'
+          and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
           AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
           AND rca.del_yn = 0 
         GROUP BY rca.collect_hour, SUBSTRING(rca.class, 2, 2)
