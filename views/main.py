@@ -145,23 +145,47 @@ else:
 
         st.divider()
 
-        # --- [1. 세션에서 테이블 선택 상태 추출] ---
+        # --- [1. 세션에서 테이블 선택 상태 추출 및 상태 검증] ---
         table_state = st.session_state.get("collect_table_selection", {})
         selected_rows = table_state.get("selection", {}).get("rows", [])
-        selected_count = len(selected_rows)
 
-        # 1-1. 상단 안내 메시지
-        if selected_count == 0:
+        # 검색 키워드 필터링을 미리 적용하여 인덱스 참조 오류 방지
+        search_kw = st.session_state.get("search_kw_val", "")  # 아래 검색창과 연동
+
+        # 실제 선택된 행의 데이터셋 추출
+        # (dataframe 렌더링 전 필터링 로직 구동을 위해 검색어 처리 순서를 상단으로 조율)
+        filtered_df = df_info.copy()
+
+        # 💡 상태 검증: 선택된 행 중 '진행' 또는 '완료' 상태인 행만 유효한 것으로 필터링
+        valid_selected_rows = []
+        invalid_selected_count = 0
+
+        if selected_rows:
+            for idx in selected_rows:
+                if idx < len(filtered_df):
+                    row_status = str(filtered_df.iloc[idx][status_col]).strip() if status_col else "완료"
+                    if row_status in ["진행", "완료"]:
+                        valid_selected_rows.append(idx)
+                    else:
+                        invalid_selected_count += 1
+
+        valid_count = len(valid_selected_rows)
+
+        # 1-1. 상단 안내 메시지 분기 처리
+        if len(selected_rows) == 0:
             st.info("💡 아래 목록에서 분석할 지점(행)을 선택해 주세요.")
-        elif selected_count == 1:
+        elif invalid_selected_count > 0:
+            st.error(f"⚠️ 선택된 지점 중 분석 불가능한 상태(진행/완료 외)인 지점이 {invalid_selected_count}개 포함되어 있습니다.")
+        elif valid_count == 1:
             st.success("✅ 1개 지점 선택됨: [일일 모니터링] 또는 [통합 대시보드] 이동 가능")
-        elif 2 <= selected_count <= 4:
-            st.success(f"✅ {selected_count}개 지점 선택됨: [다중 분석] 이동 가능")
+        elif 2 <= valid_count <= 4:
+            st.success(f"✅ {valid_count}개 지점 선택됨: [다중 분석] 이동 가능")
         else:
-            st.error("⚠️ 다중 분석은 최대 4개 지점까지만 선택 가능합니다.")
+            st.error("⚠️ 다중 분석은 '진행' 또는 '완료' 상태 지점만 최대 4개까지 선택 가능합니다.")
 
-        is_single_valid = selected_count == 1
-        is_multi_valid = 2 <= selected_count <= 4
+        # 유효한 선택 개수로만 버튼 활성화 여부 판단
+        is_single_valid = (valid_count == 1) and (invalid_selected_count == 0)
+        is_multi_valid = (2 <= valid_count <= 4) and (invalid_selected_count == 0)
 
         # 1-2. 검색창 & 버튼 수평 레이아웃
         col_search, btn_col1, btn_col2, btn_col3 = st.columns([5, 1.5, 1.5, 1.5])
@@ -171,6 +195,7 @@ else:
                 "🔍 검색",
                 placeholder="측정지점명 또는 주소 검색...",
                 label_visibility="collapsed",
+                key="search_input_field"
             )
 
         with btn_col1:
@@ -191,14 +216,13 @@ else:
 
         with btn_col3:
             btn_multi = st.button(
-                f"🔀 다중 분석 ({selected_count}/4)",
+                f"🔀 다중 분석 ({valid_count}/4)",
                 disabled=not is_multi_valid,
                 width="stretch",
                 type="primary" if is_multi_valid else "secondary",
             )
 
-        # 검색 키워드 필터링 적용
-        filtered_df = df_info.copy()
+        # 검색 키워드 필터링 재적용 (테이블 출력용)
         if search_kw:
             filtered_df = filtered_df[
                 filtered_df["측정지점"]
@@ -207,7 +231,7 @@ else:
                 | filtered_df["주소"]
                 .astype(str)
                 .str.contains(search_kw, case=False, na=False)
-            ]
+                ]
 
         column_config = {
             col: st.column_config.Column(alignment="center")
@@ -226,10 +250,10 @@ else:
             column_config=column_config,
         )
 
-        # --- [3. 페이지 이동 및 데이터 전달 로직] ---
+        # --- [3. 페이지 이동 및 데이터 전달 로직 (유효한 행 기준으로 추출)] ---
         if btn_daily or btn_dashboard:
-            # 선택된 행의 데이터 추출
-            selected_row_data = filtered_df.iloc[selected_rows[0]]
+            # 검증된 단일 행의 데이터 추출
+            selected_row_data = filtered_df.iloc[valid_selected_rows[0]]
 
             # 단일 선택된 지점의 work_no 및 memo/location 저장
             st.session_state["selected_work_no"] = selected_row_data["작업번호"]
@@ -247,12 +271,12 @@ else:
                 st.switch_page("views/dashboard.py")
 
         if btn_multi:
-            selected_data = filtered_df.iloc[selected_rows]
+            # 검증된 다중 행의 데이터만 추출
+            selected_data = filtered_df.iloc[valid_selected_rows]
             st.session_state["selected_work_nos"] = selected_data["작업번호"].tolist()
             st.session_state["selected_memos"] = selected_data[
                 "측정지점"].tolist() if "측정지점" in selected_data.columns else []
             st.switch_page("views/multi_analysis.py")
 
-# 하단 푸터
-st.caption("Copyright (R) Realtargeting All rights reserved.")
-
+    # 하단 푸터
+    st.caption("Copyright (R) Realtargeting All rights reserved.")
