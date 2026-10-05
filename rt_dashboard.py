@@ -163,12 +163,15 @@ def handle_submit():
         st.session_state["company_name"] = result["company_name"]
         st.session_state["work_list"] = result["work_list"]
         st.session_state["is_password_changed"] = result["is_password_changed"]
-        st.toast("✔️ 로그인 성공!")
+        st.toast("✔️ " + st.session_state["user_name"] + "님 로그인 되었습니다.")
 
         # 로그인 성공 시 main.py 페이지로 바로 이동
         st.switch_page("views/main.py")
     else:
-        st.toast(f"⚠️ {result['msg']}")
+        st.toast("⚠️ 로그인 정보가 없거나 열람 가능한 지점이 없습니다. 사이드바에서 먼저 로그인해 주세요.")
+
+        # 로그인 성공 시 main.py 페이지로 바로 이동
+        st.switch_page("views/loginfail.py")
 
 
 def myclear():
@@ -180,7 +183,7 @@ def myclear():
     st.session_state["is_password_changed"] = 1
     st.session_state["input_id_val"] = ""
     st.session_state["input_pw_val"] = ""
-    st.toast("🧹 로그아웃되었습니다.")
+    st.toast("🧹 로그아웃 되었습니다.")
 
 
 # ===================================================================
