@@ -471,8 +471,8 @@ else:
     # 2. 당일 성별 통행량 (파이 차트)
     qr_gender = """
         SELECT 
-            (CASE WHEN SUBSTRING(rca.class, 1, 1) = 'm' THEN '남성' 
-                  WHEN SUBSTRING(rca.class, 1, 1) = 'w' THEN '여성' END) AS gender,
+            (CASE WHEN rca.gender = 'male' THEN '남성' 
+                  WHEN rca.gender = 'female' THEN '여성' END) AS gender,
             SUM(rca.collect_cnt) AS cnt 
         FROM rt_collect_all rca 
         WHERE rca.user_id = '{id}' 
@@ -481,8 +481,8 @@ else:
           and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
           AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
           AND rca.del_yn = 0 
-        GROUP BY (CASE WHEN SUBSTRING(rca.class, 1, 1) = 'm' THEN '남성' 
-                       WHEN SUBSTRING(rca.class, 1, 1) = 'w' THEN '여성' END)
+        GROUP BY (CASE WHEN rca.gender = 'male' THEN '남성' 
+                       WHEN rca.gender = 'female' THEN '여성' END)
     """
 
     chart_gender = {
@@ -499,8 +499,8 @@ else:
     qr_gender_hour = """
         SELECT 
             rca.collect_hour AS collect_hour, 
-            (CASE WHEN SUBSTRING(rca.class, 1, 1) = 'm' THEN '남성' 
-                  WHEN SUBSTRING(rca.class, 1, 1) = 'w' THEN '여성' END) AS gender, 
+            (CASE WHEN rca.gender = 'male' THEN '남성' 
+                  WHEN rca.gender = 'female' THEN '여성' END) AS gender, 
             SUM(rca.collect_cnt) AS cnt 
         FROM rt_collect_all rca 
         WHERE rca.user_id = '{id}' 
@@ -509,7 +509,8 @@ else:
           and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
           AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
           AND rca.del_yn = 0 
-        GROUP BY rca.collect_hour, SUBSTRING(rca.class, 1, 1)
+        GROUP BY rca.collect_hour, (CASE WHEN rca.gender = 'male' THEN '남성' 
+                  WHEN rca.gender = 'female' THEN '여성' END)
         ORDER BY rca.collect_hour
     """
 
@@ -527,10 +528,7 @@ else:
     # 4. 당일 연령별 통행량 (파이 차트)
     qr_age = """
         SELECT 
-            (CASE WHEN SUBSTRING(rca.class, 2, 2) = '01' THEN '10대 이하' 
-                  WHEN SUBSTRING(rca.class, 2, 2) = '23' THEN '20~30대' 
-                  WHEN SUBSTRING(rca.class, 2, 2) = '45' THEN '40~50대' 
-                  WHEN SUBSTRING(rca.class, 2, 2) = '67' THEN '60대 이상' END) AS age, 
+            rca.age AS age, 
             SUM(rca.collect_cnt) AS cnt 
         FROM rt_collect_all rca 
         WHERE rca.user_id = '{id}' 
@@ -539,7 +537,7 @@ else:
           and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
           AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
           AND rca.del_yn = 0 
-        GROUP BY SUBSTRING(rca.class, 2, 2)
+        GROUP BY rca.age
     """
 
     chart_age = {
@@ -555,10 +553,7 @@ else:
     qr_age_hour = """
         SELECT 
             rca.collect_hour AS collect_hour, 
-            (CASE WHEN SUBSTRING(rca.class, 2, 2) = '01' THEN '10대 이하' 
-                  WHEN SUBSTRING(rca.class, 2, 2) = '23' THEN '20~30대' 
-                  WHEN SUBSTRING(rca.class, 2, 2) = '45' THEN '40~50대' 
-                  WHEN SUBSTRING(rca.class, 2, 2) = '67' THEN '60대 이상' END) AS age, 
+            rca.age AS age, 
             SUM(rca.collect_cnt) AS cnt 
         FROM rt_collect_all rca 
         WHERE rca.user_id = '{id}' 
@@ -567,7 +562,7 @@ else:
           and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
           AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
           AND rca.del_yn = 0 
-        GROUP BY rca.collect_hour, SUBSTRING(rca.class, 2, 2)
+        GROUP BY rca.collect_hour, rca.age
         ORDER BY rca.collect_hour
     """
 

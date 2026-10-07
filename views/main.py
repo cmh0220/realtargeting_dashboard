@@ -184,8 +184,12 @@ else:
             st.error("⚠️ 다중 분석은 '진행' 또는 '완료' 상태 지점만 최대 4개까지 선택 가능합니다.")
 
         # 유효한 선택 개수로만 버튼 활성화 여부 판단
-        is_single_valid = (valid_count == 1) and (invalid_selected_count == 0)
-        is_multi_valid = (2 <= valid_count <= 4) and (invalid_selected_count == 0)
+        if user_id in ["notreal", "admin"]:
+            is_single_valid = True
+            is_multi_valid = True
+        else:
+            is_single_valid = (valid_count == 1) and (invalid_selected_count == 0)
+            is_multi_valid = (2 <= valid_count <= 4) and (invalid_selected_count == 0)
 
         # 1-2. 검색창 & 버튼 수평 레이아웃
         col_search, btn_col1, btn_col2, btn_col3 = st.columns([5, 1.5, 1.5, 1.5])

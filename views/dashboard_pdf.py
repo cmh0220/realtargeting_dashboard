@@ -1,4 +1,4 @@
-import datetime
+import datetime, base64, os
 from typing import Any, Dict, List
 import streamlit as st
 from streamlit_echarts import st_echarts
@@ -6,49 +6,7 @@ import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
-from playwright.sync_api import sync_playwright
-import subprocess
 
-# 1. Playwright 크롬 브라우저 자동 설치 체크 함수
-@st.cache_resource
-def install_playwright_browser():
-    try:
-        subprocess.run(["playwright", "install", "chromium"], check=True)
-    except Exception as e:
-        st.error(f"Playwright 브라우저 설치 실패: {e}")
-
-
-# 앱 실행 시 1회 자동 설치
-install_playwright_browser()
-
-
-# 2. PDF 생성 핵심 함수
-def get_pdf_bytes(user_id: str, work_no: str):
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-        )
-
-        page = browser.new_page(
-            viewport={'width': 1200, 'height': 1600},
-            device_scale_factor=2
-        )
-
-        # 🎯 export_mode=true, user_id, work_no 3개 파라미터를 URL에 같이 주입
-        target_url = f"http://localhost:8501/dashboard_pdf?export_mode=true&user_id={user_id}&work_no={work_no}"
-        page.goto(target_url, wait_until='networkidle', timeout=60000)
-
-        # ECharts 및 Folium 렌더링 완성 대기 (2초)
-        page.wait_for_timeout(2000)
-
-        pdf_bytes = page.pdf(
-            format='A4',
-            print_background=True,
-            margin={'top': '10mm', 'bottom': '10mm', 'left': '10mm', 'right': '10mm'}
-        )
-        browser.close()
-        return pdf_bytes
 
 # Helper 함수: YYYYMMDD -> YYYY-MM-DD
 def format_date_str(date_str):
@@ -100,10 +58,246 @@ st.markdown(
         div[data-baseweb="select"] * {
             cursor: pointer !important;
         }
+        
+        [data-testid="stSidebar"] { display: none !important; }
+        [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+        header { display: none !important; }
+        footer { display: none !important; }
+        .main .block-container {
+            max-width: 100% !important;
+            padding: 1rem !important;
+        }
+        
     </style>
     """,
     unsafe_allow_html=True,
 )
+
+def get_image_base64(image_path: str) -> str:
+    """이미지 파일을 HTML에 직접 매립하기 위한 Base64 인코딩 함수"""
+    if os.path.exists(image_path):
+        with open(image_path, "rb") as img_file:
+            return f"data:image/png;base64,{base64.b64encode(img_file.read()).decode('utf-8')}"
+    return ""
+
+def render_pdf_cover(selected_work_info: dict = None):
+    """
+    업로드된 완성형 A4 표지 레이아웃 렌더링 (Markdown 코드 블록 오류 방지 처리)
+    """
+    selected_work_no = selected_work_info.get("작업번호") or selected_work_info.get("work_no")
+
+    current_year = datetime.datetime.now().year
+    current_month = datetime.datetime.now().month
+    current_day = datetime.datetime.now().day
+
+    doc_no = f"발행일자 : {current_year}년 {current_month}월 {current_day}일"
+
+    # 이미지 파일 경로 지정
+    logo_b64 = get_image_base64("images/logo_wide.png")
+    qr_b64 = get_image_base64("images/qr_chat.png")
+    kakao_logo_b64 = get_image_base64("images/kakao_icon.png")
+
+    # 태그 내부에 들어갈 이미지 HTML을 미리 완성 (f-string 중첩 에러 방지)
+    qr_html = f"<img src='{qr_b64}' class='cover-qr-img'>" if qr_b64 else "<div style='width:110px; height:110px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:11px;'>QR Image</div>"
+    kakao_logo_html = f"<img src='{kakao_logo_b64}' class='cover-logo-img'>" if kakao_logo_b64 else ""
+    logo_html = f"<img src='{logo_b64}' class='cover-logo-img'>" if logo_b64 else ""
+
+    # 들여쓰기 공백 없이 좌측에 바짝 붙인 HTML 문자열
+    cover_html = f"""<style>
+@media print {{
+    .pdf-cover-container {{
+        page-break-after: always !important;
+        break-after: page !important;
+    }}
+}}
+.pdf-cover-container {{
+    width: 100%;
+    height: 1120px;
+    background-color: #ffffff;
+    position: relative;
+    box-sizing: border-box;
+    padding: 20px 40px;
+    page-break-after: always;
+    break-after: page;
+    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}}
+.cover-doc-no {{
+    text-align: right;
+    font-size: 16px;
+    font-weight: 700;
+    color: #333333;
+    margin-bottom: 20px;
+}}
+.cover-main-wrapper {{
+    width: 100%;
+    height: 780px; /* A4 1페이지에 맞도록 높이 보정 */
+    background-color: #f0f0f0;
+    position: relative;
+}}
+.cover-blue-box {{
+    width: 53%;
+    height: 580px;
+    background-color: #1565c0;
+    padding: 48px 40px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}}
+.cover-title-kr {{
+    color: #ffffff;
+    font-size: 64px;
+    font-weight: 800;
+    line-height: 1.25;
+    letter-spacing: -1px;
+}}
+.cover-title-en {{
+    color: #90caf9;
+    font-size: 44px;
+    font-weight: 600;
+    font-style: italic;
+    line-height: 1.3;
+    margin-top: 24px;
+}}
+.cover-footer-desc {{
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 18px;
+    line-height: 1.6;
+}}
+/* 담당자 인적사항 및 QR 우측 배치 */
+.cover-bottom-wrapper {{
+    margin-top: 200px; /* 오버플로우 방지를 위한 여백 보정 */
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0 10px;
+}}
+.cover-info-list {{
+    font-size: 18px;
+    line-height: 1.9;
+    color: #222222;
+}}
+.cover-info-list div {{
+    display: flex;
+}}
+.cover-info-label {{
+    font-weight: 800;
+    width: 110px; /* 라벨 너비 확보 */
+}}
+.cover-info-val {{
+    font-weight: 700;
+}}
+/* 우측 카카오톡 + QR 수직 정렬 컨테이너 */
+.cover-qr-box {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}}
+.cover-kakao-title {{
+    font-size: 18px;
+    font-weight: 800;
+    color: #3c1e1e;
+    margin: 4px 0 8px 0;
+}}
+.cover-qr-img {{
+    width: 110px;
+    height: 110px;
+    object-fit: contain;
+}}
+/* 하단 로고 및 카피라이트 */
+.cover-footer-logo-zone {{
+    margin-top: 50px;
+    text-align: center;
+}}
+.cover-logo-img {{
+    height: 75px;
+    object-fit: contain;
+    margin-bottom: 12px;
+}}
+.cover-copyright {{
+    font-size: 18px;
+    font-weight: 700;
+    color: #333333;
+}}
+.cover-qr-box {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}}
+
+/* 🎯 로고와 텍스트를 좌우(가로)로 배치하는 헤더 박스 */
+.cover-kakao-header {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px; /* 로고와 텍스트 사이 간격 */
+    margin-bottom: 8px; /* QR 코드와의 간격 */
+}}
+
+/* 카카오 로고 이미지 크기 (텍스트 2줄 높이에 맞춤) */
+.cover-kakao-header img {{
+    height: 36px; /* 텍스트 2줄 높이에 맞춘 36px */
+    width: auto;
+    object-fit: contain;
+}}
+
+/* 카카오톡 상담하기 2줄 텍스트 */
+.cover-kakao-title {{
+    font-size: 18px;
+    font-weight: 800;
+    color: #3c1e1e;
+    line-height: 1.25; /* 2줄 텍스트 행간 고정 */
+    text-align: left; /* 좌측 정렬 */
+}}
+
+.cover-qr-img {{
+    width: 110px;
+    height: 110px;
+    object-fit: contain;
+}}
+</style>
+<div class="pdf-cover-container">
+    <div class="cover-doc-no">{doc_no}</div>
+    <div class="cover-main-wrapper">
+        <div class="cover-blue-box">
+            <div>
+                <div class="cover-title-kr">
+                    AI 통행량<br>분석 보고서
+                </div>
+                <div class="cover-title-en">
+                    AI Foot Traffic<br>Intelligence Report
+                </div>
+            </div>
+            <div class="cover-footer-desc">
+                본 보고서는 AI 통행량 분석 시스템을 기반으로 한<br>실제 데이터를 통해 작성 되었습니다.
+            </div>
+        </div>
+    </div>
+    <div class="cover-bottom-wrapper">
+        <div class="cover-info-list">
+            <div><span class="cover-info-label">담 당 자</span><span class="cover-info-val">채명훈</span></div>
+            <div><span class="cover-info-label">연 락 처</span><span class="cover-info-val">010-4424-3291</span></div>
+            <div><span class="cover-info-label">E-mail</span><span class="cover-info-val">realtargeting@gmail.com</span></div>
+            <div><span class="cover-info-label">홈페이지</span><span class="cover-info-val">https://www.realtargeting.co.kr</span></div>
+            <div style="margin-top: 4px;"><span class="cover-info-val">아이하우스(주)</span></div>
+        </div>
+        <div class="cover-qr-box">
+            <div class="cover-kakao-header">
+                {kakao_logo_html}
+                <div class="cover-kakao-title">카카오톡<br>상담하기</div>
+            </div>
+            {qr_html}
+        </div>       
+    </div>
+    <div class="cover-footer-logo-zone">
+        {logo_html}
+        <div class="cover-copyright">Copyright ® RealTargeting Allright Resolved.</div>
+    </div>
+</div>"""
+
+    st.markdown(cover_html, unsafe_allow_html=True)
 
 
 # ------------------------------------------------------------------------------
@@ -202,8 +396,10 @@ def render_location_map(selected_work_info: Dict[str, Any]):
 
 def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8):
     """상단 주요 지표 카드를 출력합니다."""
-    col1, col2, col3, col4 = st.columns(4)
-    col5, col6, col7, col8 = st.columns(4)
+    col1, col2 = st.columns(2)
+    col3, col4 = st.columns(2)
+    col5, col6 = st.columns(2)
+    col7, col8 = st.columns(2)
 
     def get_val_cnt(df, surfix):
         if df is not None and not df.empty and df.iloc[0, 0] is not None:
@@ -234,10 +430,8 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
     comp_key = f"{chart_type}_{chart_id}"
 
-    st.markdown(
-        f"<h4 style='font-size: 20px; font-weight: bold; margin-bottom: 10px;'>{title}</h4>",
-        unsafe_allow_html=True,
-    )
+
+    st.subheader(title, divider="blue")
     st.write(" ")
 
     if chart_type == "bar":
@@ -383,94 +577,99 @@ def render_chart_grid(
 # 2. 메인 페이지 로직
 # ------------------------------------------------------------------------------
 
-st.logo(
-    "images/logo_wide.png",
-    size="large",
-    link="https://realtargeting.streamlit.app",
-)
-
 conn = st.connection("mysql", type="sql")
 
-st.subheader("통합 대시보드", divider="blue")
+# 1. URL Query Parameter 확인 (Playwright 백엔드 접속 체크)
+# 2. URL Query Parameter 파싱
+query_params = st.query_params.to_dict() if hasattr(st.query_params, "to_dict") else dict(st.query_params)
 
-user_id = st.session_state.get("user_id")
-work_list = st.session_state.get("work_list", [])
+param_user_id = query_params.get("user_id")
+if isinstance(param_user_id, list): param_user_id = param_user_id[0]
 
-if not user_id or not work_list:
+param_work_no = query_params.get("work_no")
+if isinstance(param_work_no, list): param_work_no = param_work_no[0]
+
+selected_work_info = None
+
+# DB에서 해당 work_no의 시작/종료 일자 및 정보 조회
+work_query = f"""
+        SELECT * 
+        FROM rt_collect_info 
+        WHERE user_id = '{param_user_id}' AND work_no = {param_work_no}
+        LIMIT 1
+    """
+try:
+    df_work = conn.query(work_query, ttl=0)
+    if not df_work.empty:
+        selected_work_info = df_work.to_dict(orient="records")[0]
+    else:
+        # rt_work 테이블 정보가 없을 경우 기본값 세팅 (필요 시 테이블명 수정)
+        selected_work_info = {
+            "work_no": param_work_no,
+            "작업번호": param_work_no,
+            "start_date": "20200101",
+            "end_date": "20991231",
+            "start_time": "00",
+            "end_time": "24"
+        }
+except Exception as e:
+    st.error(f"지점 정보 조회 실패: {e}")
+
+
+# 선택된 work_no 세션 반영
+st.session_state["selected_work_no"] = param_work_no
+start_date_raw = format_date_str(selected_work_info.get("시작일자") or selected_work_info.get("start_date"))
+end_date_raw = format_date_str(selected_work_info.get("종료일자") or selected_work_info.get("end_date"))
+start_time_raw = format_time_str(selected_work_info.get("시작시간") or selected_work_info.get("start_time"))
+end_time_raw = format_time_str(selected_work_info.get("종료시간") or selected_work_info.get("end_time"))
+
+# 1. 날짜에서 '-' 제거하여 YYYYMMDD 형태로 변환
+start_date_str = str(start_date_raw).replace("-", "").strip()
+end_date_str = str(end_date_raw).replace("-", "").strip()
+
+# 2. 시간에서 ':'를 제거하고 HH (시) 2자리만 추출
+start_time_clean = str(start_time_raw).replace(":", "").strip()
+end_time_clean = str(end_time_raw).replace(":", "").strip()
+
+start_time_str = start_time_clean[:2].zfill(2) if start_time_clean else ""
+end_time_str = end_time_clean[:2].zfill(2) if end_time_clean else ""
+
+# 2. PDF 출력 모드 시 전용 스타일 적용 (사이드바, 헤더, 로고 완벽 제거)
+st.markdown("""
+    <style>
+        [data-testid="stSidebar"] { display: none !important; }
+        [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+        header { display: none !important; }
+        footer { display: none !important; }
+        .main .block-container {
+            max-width: 100% !important;
+            padding: 1rem !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# 3. user_id 및 work_list(작업 정보) 결정 분기
+# 🎯 Playwright 접속 시: URL 파라미터 기반으로 user_id 및 단일 work_info 구성
+if not param_user_id:
     st.error("⚠️ 로그인 정보가 없거나 열람 가능한 지점이 없습니다. 사이드바에서 먼저 로그인해 주세요.")
 else:
 
-    # 한글/영문 Key 모도 호환 가능한 옵션 텍스트 매핑
-    location_options = [
-        item.get("측정지점") or item.get("memo") or item.get("주소") or item.get("location") or f"지점 {item.get('작업번호', item.get('work_no'))}"
-        for item in work_list
-    ]
+    # 1. 표지 렌더링
+    render_pdf_cover(selected_work_info)
 
-    default_work_no = st.session_state.get("selected_work_no")
-    default_idx = 0
-
-    if default_work_no is not None:
-        for idx, item in enumerate(work_list):
-            item_work_no = item.get("작업번호") or item.get("work_no")
-            if str(item_work_no) == str(default_work_no):
-                default_idx = idx
-                break
-
-    # 8:2 비율로 컬럼 나누기
-    col1, col2 = st.columns([8, 2])
-
-    with col1:
-        selected_location = st.selectbox(
-            "📍 측정지점 선택",
-            options=location_options,
-            index=default_idx,
-            key="sb_dashboard_location"
-        )
-
-    selected_work_info = work_list[location_options.index(selected_location)]
-    selected_work_no = selected_work_info.get("작업번호") or selected_work_info.get("work_no")
-
-    with col2:
-        # selectbox의 상단 라벨 높이에 맞춰 버튼 위치를 내리기 위한 여백 처리
-        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-
-        # PDF 다운로드 버튼 (일반 화면에서만 노출)
-        st.download_button(
-            label="💾 PDF 다운로드",
-            data=lambda: get_pdf_bytes(user_id, selected_work_no),
-            file_name=f"리얼타겟팅 보고서_{user_id}_{selected_work_no}.pdf",
-            mime="application/pdf",
-            type="primary",
-            use_container_width=True
-        )
-
-    # 선택된 work_no 세션 반영
-    st.session_state["selected_work_no"] = selected_work_no
-    start_date_raw = format_date_str(selected_work_info.get("시작일자") or selected_work_info.get("start_date"))
-    end_date_raw = format_date_str(selected_work_info.get("종료일자") or selected_work_info.get("end_date"))
-    start_time_raw = format_time_str(selected_work_info.get("시작시간") or selected_work_info.get("start_time"))
-    end_time_raw = format_time_str(selected_work_info.get("종료시간") or selected_work_info.get("end_time"))
-
-    # 1. 날짜에서 '-' 제거하여 YYYYMMDD 형태로 변환
-    start_date_str = str(start_date_raw).replace("-", "").strip()
-    end_date_str = str(end_date_raw).replace("-", "").strip()
-
-    # 2. 시간에서 ':'를 제거하고 HH (시) 2자리만 추출
-    start_time_clean = str(start_time_raw).replace(":", "").strip()
-    end_time_clean = str(end_time_raw).replace(":", "").strip()
-
-    start_time_str = start_time_clean[:2].zfill(2) if start_time_clean else ""
-    end_time_str = end_time_clean[:2].zfill(2) if end_time_clean else ""
+    st.subheader("분석요약", divider="blue")
 
     st.write(" ")
 
     # 지도 및 기본 정보 표시
     render_location_map(selected_work_info)
     st.write(" ")
+    st.write(" ")
+    st.write(" ")
 
     variables1 = {
-        "id": user_id,
-        "work_no": selected_work_no,
+        "id": param_user_id,
+        "work_no": param_work_no,
         "start_date_str": start_date_str,
         "end_date_str": end_date_str,
         "start_time_str": start_time_str,

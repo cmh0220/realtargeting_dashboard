@@ -2,3 +2,9 @@ build-essential
 pkg-config
 default-libmysqlclient-dev
 libmariadb-dev
+libgbm1
+libnss3
+libatk-bridge2.0-0
+libgtk-3-0
+libasound2
+libxshmfence1
