@@ -67,7 +67,13 @@ st.markdown(
             max-width: 100% !important;
             padding: 1rem !important;
         }
-        
+        @font-face {
+            font-family: 'NanumGothic';
+            src: url('fonts/NanumGothic.ttf') format('truetype');
+        }
+        * {
+            font-family: 'NanumGothic', sans-serif !important;
+        }
     </style>
     """,
     unsafe_allow_html=True,
