@@ -69,10 +69,10 @@ st.markdown(
         }
         @font-face {
             font-family: 'NanumGothic';
-            src: url('fonts/NanumGothic.ttf') format('truetype');
+            src: url('fonts/NanumGothicExtraBold.ttf') format('truetype');
         }
         * {
-            font-family: 'NanumGothic', sans-serif !important;
+            font-family: 'NanumGothicExtraBold', sans-serif !important;
         }
     </style>
     """,
