@@ -63,6 +63,12 @@ admin_device_page = st.Page(
     title="   기기설정 관리",
 )
 
+# 일일점검 페이지 추가
+admin_check_page = st.Page(
+    "views/admin_check.py",
+    title="   일일점검",
+)
+
 # 로그인 실패 페이지
 loginfail_page = st.Page(
     "views/loginfail.py",
@@ -106,6 +112,7 @@ home_pages = [main_page, guide_page]
 if st.session_state.get("user_id") == "notreal":
     home_pages.append(admin_page)
     home_pages.append(admin_device_page)
+    home_pages.append(admin_check_page)
 
 pages = {
     "🏠홈": home_pages,
