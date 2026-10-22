@@ -52,8 +52,18 @@ guide_page = st.Page(
     title="   이용 가이드",
 )
 
+# 관리자 전용 페이지 추가
+admin_page = st.Page(
+    "views/admin.py",
+    title="   기본정보 관리",
+)
+
+admin_device_page = st.Page(
+    "views/admin_device.py",
+    title="   기기설정 관리",
+)
+
 # 로그인 실패 페이지
-# 사이드바에는 표시하지 않음
 loginfail_page = st.Page(
     "views/loginfail.py",
     title="   로그인 실패",
@@ -88,13 +98,17 @@ dashboard_car_page = st.Page(
 
 
 # ===================================================================
-# Multi-Page Navigation
+# Multi-Page Navigation (동적 메뉴 구성)
 # ===================================================================
+home_pages = [main_page, guide_page]
+
+# 로그인한 user_id가 "notreal"인 경우 관리자 메뉴들 추가
+if st.session_state.get("user_id") == "notreal":
+    home_pages.append(admin_page)
+    home_pages.append(admin_device_page)
+
 pages = {
-    "🏠홈": [
-        main_page,
-        guide_page,
-    ],
+    "🏠홈": home_pages,
     "👨‍👩‍👧‍👦방문자분석": [
         today_page,
         dashboard_page,
