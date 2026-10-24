@@ -256,6 +256,11 @@ else:
 
         # --- [3. 페이지 이동 및 데이터 전달 로직 (유효한 행 기준으로 추출)] ---
         if btn_daily or btn_dashboard:
+            # 방어 코드: 체크된 행이 아예 없거나 1개가 아닌 경우 차단
+            if valid_count != 1 or len(valid_selected_rows) == 0:
+                st.warning("⚠️ 분석할 지점을 목록에서 1개 선택해 주세요. [예정 지점은 제외]")
+                st.stop()
+
             # 검증된 단일 행의 데이터 추출
             selected_row_data = filtered_df.iloc[valid_selected_rows[0]]
 
@@ -275,11 +280,19 @@ else:
                 st.switch_page("views/dashboard.py")
 
         if btn_multi:
+            # 방어 코드: 다중 선택 개수가 2~4개가 아닌 경우 차단
+            if not (2 <= valid_count <= 4):
+                st.warning("⚠️ 다중 분석할 지점을 2개에서 4개 사이로 선택해 주세요.")
+                st.stop()
+
             # 검증된 다중 행의 데이터만 추출
             selected_data = filtered_df.iloc[valid_selected_rows]
             st.session_state["selected_work_nos"] = selected_data["작업번호"].tolist()
-            st.session_state["selected_memos"] = selected_data[
-                "측정지점"].tolist() if "측정지점" in selected_data.columns else []
+            st.session_state["selected_memos"] = (
+                selected_data["측정지점"].tolist()
+                if "측정지점" in selected_data.columns
+                else []
+            )
             st.switch_page("views/multi_analysis.py")
 
     # 하단 푸터

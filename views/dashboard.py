@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, date, timedelta
 from typing import Any, Dict, List
 import streamlit as st
 from streamlit_echarts import st_echarts
@@ -9,6 +9,8 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 from playwright.sync_api import sync_playwright
 import subprocess
 import pandas as pd
+import requests
+
 
 # 1. Playwright 크롬 브라우저 자동 설치 체크 함수
 @st.cache_resource
@@ -51,6 +53,7 @@ def get_pdf_bytes(user_id: str, work_no: str):
         browser.close()
         return pdf_bytes
 
+
 # Helper 함수: YYYYMMDD -> YYYY-MM-DD
 def format_date_str(date_str):
     if date_str and len(str(date_str)) == 8:
@@ -68,44 +71,189 @@ def format_time_str(time_str):
             return f"{s[:2]}:{s[2:]}"
     return time_str or "-"
 
-# ------------------------------------------------------------------------------
-# Page CSS Customization
-# ------------------------------------------------------------------------------
-st.markdown(
+def render_section_header(icon: str, ko_title: str, en_title: str):
+    """보고서 스타일의 일체형 섹션 헤더를 렌더링합니다."""
+    st.markdown(
+        f"""
+        <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 20px; margin-bottom: 16px;">
+            <span style="font-size: 32px; line-height: 1;">{icon}</span>
+            <div style="display: flex; align-items: baseline; gap: 12px;">
+                <span style="font-size: 30px; font-weight: bold; color: #0f172a; letter-spacing: -0.5px;">{ko_title}</span>
+                <span style="font-size: 24px; font-weight: 500; color: #94a3b8; font-family: sans-serif;">{en_title}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def render_info_footer(logo_path_or_url: str = None):
     """
+    대시보드 하단 안내문 및 로고 레이아웃 렌더링 함수
+    :param logo_path_or_url: 가운데 들어갈 로고 이미지 경로 또는 URL
+    """
+
+    # Custom CSS 적용
+    st.markdown("""
     <style>
-        /* st.logo 이미지 컨테이너 크기 확대 */
-        [data-testid="stSidebarHeader"] img {
-            height: 100px !important;   /* 원하는 높이로 조절 */
-            width: auto !important;
-            max-width: 100% !important;
+        .info-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: #1E293B;
+            margin-bottom: 8px;
         }
-        /* 로고 영역 컨테이너 여백 조정 */
-        [data-testid="stSidebarHeader"] {
-            padding-top: 40px !important;
-            padding-bottom: 40px !important;
-            padding-left: 0px !important;
+        .info-divider {
+            border-bottom: 3px solid #3B82F6;
+            margin-bottom: 24px;
         }
-
-        /* 💡 셀렉트박스 입력창 커서 숨김, 입력 차단 및 선택 불가 처리 */
-        div[data-baseweb="select"] input {
-            caret-color: transparent !important; /* 깜빡이는 커서 숨김 */
-            user-select: none !important;        /* 텍스트 드래그 및 선택 방지 */
+        .info-list {
+            font-size: 14.5px;
+            line-height: 1.7;
+            color: #334155;
+            margin-bottom: 30px;
         }
-
-        /* 셀렉트박스 전체에 클릭만 허용하고 텍스트 커서 모양(I-beam) 방지 */
-        div[data-baseweb="select"] {
-            cursor: pointer !important;
+        .info-list p {
+            margin-bottom: 12px;
+            word-break: keep-all;
         }
 
-        div[data-baseweb="select"] * {
-            cursor: pointer !important;
+        /* 주의사항 박스 */
+        .warning-box {
+            background-color: #FEF9C3;
+            border: 1px solid #FDE047;
+            border-radius: 8px;
+            padding: 30px 24px;
+            margin-top: 35px;
+            margin-bottom: 25px;
+            color: #1E293B;
+            font-size: 13.5px;
+            line-height: 1.6;
+        }
+        .warning-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: #854D0E;
+        }
+        .warning-list {
+            margin-left: 28px;
+            color: #334155;
+        }
+        .warning-list li {
+            margin-bottom: 4px;
+        }
+
+        /* 저작권 표시 */
+        .copyright {
+            text-align: right;
+            font-size: 13px;
+            color: #64748B;
+            font-weight: 600;
+            margin-top: 15px;
         }
     </style>
-    """,
-    unsafe_allow_html=True,
-)
+    """, unsafe_allow_html=True)
 
+    # ----------------------------------------------------
+    # 1. 상단 타이틀 및 안내문
+    # ----------------------------------------------------
+    st.markdown('<div class="info-title">AI 통행량 분석 안내</div>', unsafe_allow_html=True)
+    st.markdown('<div class="info-divider"></div>', unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="info-list">
+        <p><b>1.</b> 통행량 데이터 수집 프로세스는 인공지능 기술을 이용하여 모든 과정이 자동으로 처리됩니다.</p>
+        <p><b>2.</b> 수집된 정보는 모두 개인을 식별할 수 없는 메타데이터로 구성되어 있으며 파일 암호화 및 접근통제가 적용되어 있습니다.</p>
+        <p><b>3.</b> 영상정보처리기기 운영 및 관리지침에 의해 관리되고 있으며, 통행량 데이터 수집시 영상을 녹화하거나 저장하지 않으며 개인정보보호법을 엄격히 준수합니다.</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ----------------------------------------------------
+    # 3. 하단 경고 및 안내 박스
+    # ----------------------------------------------------
+    st.markdown("""
+    <div class="warning-box" style="margin-top: 35px;">
+        <div class="warning-header">
+            <span style="font-size: 20px;">⚠️</span>
+            <div>
+                본 보고서는 인공지능 AI 영상인식 기술을 활용하여 통행량을 분석하여 작성되었습니다.<br>
+                상황에 따라 아래와 같이 일부 오탐지 되는 경우도 있는 점 미리 안내드립니다. 따라서 이 점 충분히 감안하여 상권분석에 활용하시기 바랍니다.
+            </div>
+        </div>
+        <ol class="warning-list" type="1">
+            <li>측정 순간 객체의 일부 혹은 전체가 가려진 경우(차량, 타 보행자) 누락 가능</li>
+            <li>뛰어가거나 차량, 자전거, 오토바이에 탑승하여 빠르게 통과 하는 경우 누락 가능</li>
+            <li>조명이 부족한 경우(새벽, 야간) 탐지 누락 가능</li>
+            <li>사람이 봐도 성별 구분이 어려운 경우 성별 오탐지</li>
+            <li>그 외 AI가 인식하지 못하는 경우 발생</li>
+        </ol>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ----------------------------------------------------
+    # 2. 중앙 로고 영역
+    # ----------------------------------------------------
+    if logo_path_or_url:
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            st.image(logo_path_or_url, width='stretch')
+    else:
+        # 파일이 없을 때 보여주는 샘플 대용 박스 (실제 적용 시 삭제 가능)
+        st.info("💡 여기에 로고 이미지(logo_path_or_url)를 지정해 주세요.")
+
+    # ----------------------------------------------------
+    # 4. 카피라이트 (Copyright)
+    # ----------------------------------------------------
+    st.markdown('<div style="text-align: right;" class="copyright">Copyright © 2026. All Rights Reserved.</div>', unsafe_allow_html=True)
+
+
+# 1. 해당 작업(work_no)의 모든 코멘트를 한 번에 가져오는 함수
+@st.cache_data(ttl=0)
+def fetch_all_comments(user_id: str, work_no: str):
+    query = """
+        SELECT com1, com2, com3, com4, com5, com6, com7, com8, com9 
+        FROM rt_collect_comment 
+        WHERE user_id = :user_id AND work_no = :work_no
+    """
+    try:
+        df = conn.query(query, params={"user_id": user_id, "work_no": work_no}, ttl=0)
+        if df is not None and not df.empty:
+            # 첫 번째 행을 딕셔너리 형태로 변환하여 반환 (예: {'com1': '내용...', 'com2': '내용...', ...})
+            return df.iloc[0].to_dict()
+    except Exception as e:
+        pass
+    return {}
+
+
+# 2. 미리 조회해 둔 딕셔너리에서 특정 컬럼의 코멘트를 출력하는 함수
+def render_comment_box(comments_dict: dict, comment_key: str = "com1"):
+    comment_text = ""
+    if comments_dict:
+        val = comments_dict.get(comment_key)
+        if val and str(val).strip() != "None" and str(val).strip() != "nan":
+            comment_text = str(val)
+
+    st.markdown(
+        f"""
+        <div style="            
+            box-sizing: border-box;
+            background-color: #f1f3f5;
+            border-radius: 6px;
+            padding: 20px;                      /* 🌟 상하좌우 모든 방향에 동일하게 4px 적용 */
+            margein-left: 2px;
+            font-size: 15px;
+            color: #212529;
+            line-height: 1.6;
+            white-space: pre-line;
+            word-break: keep-all;
+        "><B>Comment</B><BR>
+            {comment_text}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # ------------------------------------------------------------------------------
 # 1. 공통 차트 렌더러 (Chart Component Functions)
@@ -123,7 +271,8 @@ def render_location_map(selected_work_info: Dict[str, Any]):
         start_time = format_time_str(selected_work_info.get("시작시간") or selected_work_info.get("start_time"))
         end_time = format_time_str(selected_work_info.get("종료시간") or selected_work_info.get("end_time"))
         address = selected_work_info.get("주소") or selected_work_info.get("location", "-")
-        memo = selected_work_info.get("측정지점") or selected_work_info.get("memo") or f"지점 {selected_work_info.get('작업번호') or selected_work_info.get('work_no')}"
+        memo = selected_work_info.get("측정지점") or selected_work_info.get(
+            "memo") or f"지점 {selected_work_info.get('작업번호') or selected_work_info.get('work_no')}"
 
         st.markdown(
             f"""
@@ -138,28 +287,28 @@ def render_location_map(selected_work_info: Dict[str, Any]):
                 justify-content: center;
             ">
                 <h4 style="margin-top: 0; margin-bottom: 12px; color: #1e293b; font-size: 17px; font-weight: bold;">
-                    📌 {memo}
+                    위치 : {memo}                    
                 </h4>
-                <p style="margin-bottom: 25px; color: #64748b; font-size: 13px; line-height: 1.4;">
-                    <b>주소:</b> {address}
-                </p>
+                <h4 style="margin-top: 0; margin-bottom: 12px; color: #1e293b; font-size: 17px; font-weight: bold;">
+                    주소 : {address}
+                </h4>
                 <hr style="margin: 8px 0 16px 0; border: none; border-top: 1px solid #e2e8f0;">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                     <div>
-                        <span style="font-size: 15px; color: #64748b; display: block;">📅 측정 시작일자</span>
-                        <span style="font-size: 15px; font-weight: 600; color: #0f172a; margin-left: 24px;">{start_date}</span>
+                        <span style="font-size: 17px; color: #64748b; display: block;">📅 측정 시작일자</span>
+                        <span style="font-size: 17px; font-weight: 600; color: #0f172a; margin-left: 24px;">{start_date}</span>
                     </div>
                     <div>
-                        <span style="font-size: 15px; color: #64748b; display: block;">📅 측정 종료일자</span>
-                        <span style="font-size: 15px; font-weight: 600; color: #0f172a; margin-left: 24px;">{end_date}</span>
+                        <span style="font-size: 17px; color: #64748b; display: block;">📅 측정 종료일자</span>
+                        <span style="font-size: 17px; font-weight: 600; color: #0f172a; margin-left: 24px;">{end_date}</span>
                     </div>
                     <div>
-                        <span style="font-size: 15px; color: #64748b; display: block;">⏰ 측정 시작시간</span>
-                        <span style="font-size: 15px; font-weight: 600; color: #2563eb; margin-left: 24px;">{start_time}</span>
+                        <span style="font-size: 17px; color: #64748b; display: block;">⏰ 측정 시작시간</span>
+                        <span style="font-size: 17px; font-weight: 600; color: #2563eb; margin-left: 24px;">{start_time}</span>
                     </div>
                     <div>
-                        <span style="font-size: 15px; color: #64748b; display: block;">⏰ 측정 종료시간</span>
-                        <span style="font-size: 15px; font-weight: 600; color: #2563eb; margin-left: 24px;">{end_time}</span>
+                        <span style="font-size: 17px; color: #64748b; display: block;">⏰ 측정 종료시간</span>
+                        <span style="font-size: 17px; font-weight: 600; color: #2563eb; margin-left: 24px;">{end_time}</span>
                     </div>
                 </div>
             </div>
@@ -236,7 +385,7 @@ def render_chart_item(chart_info: Dict[str, Any]):
     comp_key = f"{chart_type}_{chart_id}"
 
     st.markdown(
-        f"<h4 style='font-size: 20px; font-weight: bold; margin-bottom: 10px;'>{title}</h4>",
+        f"<h4 style='font-size: 20px; font-weight: bold; margin-bottom: 0px;'>{title}</h4>",
         unsafe_allow_html=True,
     )
     st.write(" ")
@@ -274,30 +423,26 @@ def render_chart_item(chart_info: Dict[str, Any]):
         st_echarts(options=options, height="300px", key=comp_key)
 
     elif chart_type == "echarts_multi_bar_gender":
-        # index_col: x축 기준 (예: 일자 또는 시간), columns_col: 그룹화할 기준 (예: 성별), values_col: 값
         index_col = chart_info.get("index_col", "collect_date")
         columns_col = chart_info.get("columns_col", "gender")
         values_col = chart_info.get("values_col", "cnt")
         y_name = chart_info.get("y_name", "통행량")
-        is_stacked = chart_info.get("stacked", True)  # 기본값: 누적 바 차트 (False면 그룹 바 차트)
+        is_stacked = chart_info.get("stacked", True)
 
-        # 데이터 피벗 (없는 데이터는 0으로 채움)
         pivot_df = df.pivot(index=index_col, columns=columns_col, values=values_col).fillna(0)
 
         x_data = [str(idx) for idx in pivot_df.index]
         legend_keys = list(pivot_df.columns)
 
-        # 🎨 성별/항목별 맞춤 색상 맵 정의 (원하시는 HEX 코드로 자유롭게 변경 가능합니다)
         color_map = {
-            "남성": "#60A5FA",  # 파란 계열
-            "여성": "#F472B6",  # 핑크 계열
-            "m": "#60A5FA",  # 영문 키값이 'm'인 경우 대비
-            "w": "#F472B6",  # 영문 키값이 'w'인 경우 대비
-            "왼쪽": "#A865B5",  # 연한 보라색 계열 (예: Lavender)
-            "오른쪽": "#9fcc4b"  # 연한 연두색 계열 (예: Light Mint/Green)
+            "남성": "#60A5FA",
+            "여성": "#F472B6",
+            "m": "#60A5FA",
+            "w": "#F472B6",
+            "왼쪽": "#A865B5",
+            "오른쪽": "#9fcc4b"
         }
 
-        # 각 그룹별 시리즈 생성 (color 속성 추가)
         series_list = []
         for key in legend_keys:
             series_item = {
@@ -421,7 +566,6 @@ def render_chart_item(chart_info: Dict[str, Any]):
         st_echarts(options=options, height="400px", key=comp_key)
 
     elif chart_type == "echarts_pie":
-
         name_col = chart_info.get("name_col", "name")
         val_col = chart_info.get("value_col", "cnt")
         semi_pie = chart_info.get("semi_pie", None)
@@ -503,22 +647,16 @@ def render_chart_item(chart_info: Dict[str, Any]):
         }
         st_echarts(options=option, height="400px", key=comp_key)
 
-
     elif chart_type == "echarts_multi_line":
-
         index_col = chart_info.get("index_col", "collect_hour")
-
         columns_col = chart_info.get("columns_col", "collect_day")
-
         values_col = chart_info.get("values_col", "cnt")
-
         y_name = chart_info.get("y_name", "통행량")
 
         # 🛡️ 방어 로직: 데이터 유무 및 컬럼 체크
 
         if df is None or df.empty:
             st.warning(f"⚠️ '{title}' 차트에 표시할 데이터가 없습니다.")
-
             return
 
         missing_cols = [col for col in [index_col, columns_col, values_col] if col not in df.columns]
@@ -529,17 +667,11 @@ def render_chart_item(chart_info: Dict[str, Any]):
             return
 
         try:
-
             pivot_df = df.pivot(index=index_col, columns=columns_col, values=values_col).fillna(0)
-
             days_order = ['월', '화', '수', '목', '금', '토', '일']
-
             if any(col in days_order for col in pivot_df.columns):
-
                 legend_keys = [d for d in days_order if d in pivot_df.columns]
-
             else:
-
                 legend_keys = list(pivot_df.columns)
 
             x_data = [f"{int(h):02d}시" if str(h).isdigit() else str(h) for h in pivot_df.index]
@@ -571,6 +703,7 @@ def render_chart_item(chart_info: Dict[str, Any]):
                     series_item["itemStyle"] = {"color": color_map[str(key)]}
                     series_item["lineStyle"] = {"color": color_map[str(key)]}
                 series_list.append(series_item)
+
             option = {
                 "tooltip": {"trigger": "axis", "axisPointer": {"type": "cross"}},
                 "legend": {"top": "0%", "data": [str(k) for k in legend_keys]},
@@ -626,7 +759,6 @@ def render_chart_item(chart_info: Dict[str, Any]):
                 "splitLine": {"show": False},
                 "axisLabel": {"show": True},
             },
-
             "yAxis": {
                 "type": "category",
                 "data": y_categories,
@@ -647,7 +779,6 @@ def render_chart_item(chart_info: Dict[str, Any]):
                         "fontWeight": "bold",
                         "fontSize": 20
                     },
-
                     "itemStyle": {
                         "color": "#3B82F6",
                         "borderRadius": [0, 4, 4, 0]  # 막대 끝을 둥글게 처리
@@ -658,10 +789,11 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
         st_echarts(options=options, height=chart_info.get("height", "350px"), key=comp_key)
 
+
 def render_chart_grid(
-    charts: List[Dict[str, Any]],
-    cols_per_row: int = 3,
-    ratios: List[float] = None,
+        charts: List[Dict[str, Any]],
+        cols_per_row: int = 3,
+        ratios: List[float] = None,
 ):
     """차트 리스트를 받아 지정한 열 개수나 비율에 맞춰 자동으로 행을 나누어 배치합니다."""
     for i in range(0, len(charts), cols_per_row):
@@ -687,7 +819,7 @@ st.logo(
 
 conn = st.connection("mysql", type="sql")
 
-st.subheader("통합 대시보드", divider="blue")
+st.subheader("통합 보고서", divider="blue")
 
 user_id = st.session_state.get("user_id")
 work_list = st.session_state.get("work_list", [])
@@ -696,9 +828,9 @@ if not user_id or not work_list:
     st.error("⚠️ 로그인 정보가 없거나 열람 가능한 지점이 없습니다. 사이드바에서 먼저 로그인해 주세요.")
 else:
 
-    # 한글/영문 Key 모도 호환 가능한 옵션 텍스트 매핑
     location_options = [
-        item.get("측정지점") or item.get("memo") or item.get("주소") or item.get("location") or f"지점 {item.get('작업번호', item.get('work_no'))}"
+        item.get("측정지점") or item.get("memo") or item.get("주소") or item.get(
+            "location") or f"지점 {item.get('작업번호', item.get('work_no'))}"
         for item in work_list
     ]
 
@@ -712,7 +844,6 @@ else:
                 default_idx = idx
                 break
 
-    # 8:2 비율로 컬럼 나누기
     col1, col2 = st.columns([8, 2])
 
     with col1:
@@ -726,11 +857,14 @@ else:
     selected_work_info = work_list[location_options.index(selected_location)]
     selected_work_no = selected_work_info.get("작업번호") or selected_work_info.get("work_no")
 
+    if user_id in ['notreal', 'admin']:
+        variables = {'work_no': selected_work_no}
+        qr_special = """ select user_id from rt_collect_info where work_no = {work_no}"""
+        user_id = conn.query(qr_special.format(**variables), ttl=0).iloc[0, 0]
+
     with col2:
-        # selectbox의 상단 라벨 높이에 맞춰 버튼 위치를 내리기 위한 여백 처리
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
 
-        # PDF 다운로드 버튼 (일반 화면에서만 노출)
         st.download_button(
             label="💾 PDF 다운로드",
             data=lambda: get_pdf_bytes(user_id, selected_work_no),
@@ -740,18 +874,15 @@ else:
             use_container_width=True
         )
 
-    # 선택된 work_no 세션 반영
     st.session_state["selected_work_no"] = selected_work_no
     start_date_raw = format_date_str(selected_work_info.get("시작일자") or selected_work_info.get("start_date"))
     end_date_raw = format_date_str(selected_work_info.get("종료일자") or selected_work_info.get("end_date"))
     start_time_raw = format_time_str(selected_work_info.get("시작시간") or selected_work_info.get("start_time"))
     end_time_raw = format_time_str(selected_work_info.get("종료시간") or selected_work_info.get("end_time"))
 
-    # 1. 날짜에서 '-' 제거하여 YYYYMMDD 형태로 변환
     start_date_str = str(start_date_raw).replace("-", "").strip()
     end_date_str = str(end_date_raw).replace("-", "").strip()
 
-    # 2. 시간에서 ':'를 제거하고 HH (시) 2자리만 추출
     start_time_clean = str(start_time_raw).replace(":", "").strip()
     end_time_clean = str(end_time_raw).replace(":", "").strip()
 
@@ -762,6 +893,227 @@ else:
 
     # 지도 및 기본 정보 표시
     render_location_map(selected_work_info)
+    st.write(" ")
+
+    # ------------------------------------------------------------------------------
+    # 🌟 [추가 기능] 측정 기간 일자별 날씨 정보 연동 영역
+    # ------------------------------------------------------------------------------
+    st.subheader("🌦️ 측정 기간 일자별 날씨 정보", divider="gray")
+
+    # 1. 지점 위도/경도 좌표 추출
+    lat_val = selected_work_info.get("위도") or selected_work_info.get("latitude")
+    lng_val = selected_work_info.get("경도") or selected_work_info.get("longitude")
+
+    if lat_val is not None and lng_val is not None:
+        try:
+            lat_float = float(lat_val)
+            lng_float = float(lng_val)
+
+            # 2. 시작일자/종료일자 문자열(YYYYMMDD)을 API 포맷(YYYY-MM-DD)으로 변환
+            if len(start_date_str) == 8 and len(end_date_str) == 8:
+                api_start_date = f"{start_date_str[:4]}-{start_date_str[4:6]}-{start_date_str[6:]}"
+                api_end_date = f"{end_date_str[:4]}-{end_date_str[4:6]}-{end_date_str[6:]}"
+
+                # 💡 [추가] 종료일이 오늘(또는 어제)보다 미래일 경우, 조회 가능한 최대 과거 날짜(어제)로 자동 조정
+                max_available_date = date.today() - timedelta(days=1)
+                try:
+                    parsed_end_date = datetime.strptime(api_end_date, "%Y-%m-%d").date()
+                    if parsed_end_date > max_available_date:
+                        api_end_date = max_available_date.strftime("%Y-%m-%d")
+                        # 시작일이 조정된 종료일보다 이후가 되는 경우 방지
+                        if api_start_date > api_end_date:
+                            api_start_date = api_end_date
+                except Exception:
+                    pass
+
+                # 3. Open-Meteo API 호출 함수
+                @st.cache_data
+                def fetch_weather_range(lat, lon, start, end):
+                    url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start}&end_date={end}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&timezone=Asia%2FSeoul"
+                    try:
+                        res = requests.get(url, timeout=10)
+                        if res.status_code == 200:
+                            return res.json()
+                    except Exception:
+                        pass
+                    return None
+
+
+                # WMO 날씨 코드를 아이콘 및 한글 상태로 매핑
+                def get_weather_icon(code):
+                    if code == 0:
+                        return "☀️ 맑음"
+                    elif code in [1, 2, 3]:
+                        return "⛅ 구름/흐림"
+                    elif code in [45, 48]:
+                        return "🌫️ 안개"
+                    elif code in [51, 53, 55, 56, 57, 61, 63, 65, 66, 67]:
+                        return "🌧️ 비"
+                    elif code in [71, 73, 75, 77, 85, 86]:
+                        return "❄️ 눈"
+                    elif code >= 95:
+                        return "⛈️ 천둥번개"
+                    else:
+                        return "🌡️ 기타"
+
+                weather_data = fetch_weather_range(lat_float, lng_float, api_start_date, api_end_date)
+
+                if weather_data and "daily" in weather_data:
+                    daily = weather_data["daily"]
+                    weather_df = pd.DataFrame({
+                        "날짜": daily["time"],
+                        "최고기온": daily["temperature_2m_max"],
+                        "최저기온": daily["temperature_2m_min"],
+                        "강수량": daily["precipitation_sum"],
+                        "날씨코드": daily["weathercode"]
+                    })
+                    weather_df["상태"] = weather_df["날씨코드"].apply(get_weather_icon)
+
+                    # 일자별 카드 형태로 그리드 표시 (최대 7일씩 행 분할 등 처리)
+                    num_days = len(weather_df)
+                    if num_days > 0:
+                        # 화면 너비에 맞게 최대 7열씩 나누어 출력
+                        cols = st.columns(min(num_days, 7))
+                        for idx, row in weather_df.iterrows():
+                            col_idx = idx % 7
+                            if col_idx == 0 and idx > 0:
+                                cols = st.columns(min(num_days - idx, 7))
+
+                            with cols[col_idx]:
+                                icon_part = row["상태"].split()[0]
+                                text_part = row["상태"].split()[1] if len(row["상태"].split()) > 1 else ""
+                                st.markdown(
+                                    f"""
+                                    <div style="
+                                        background-color: #f8f9fa;
+                                        border: 1px solid #e2e8f0;
+                                        border-radius: 6px;
+                                        padding: 10px;
+                                        text-align: center;
+                                        margin-bottom: 10px;
+                                    ">
+                                        <div style="font-size: 13px; font-weight: bold; color: #475569;">{row['날짜']}</div>
+                                        <div style="font-size: 24px; margin: 4px 0;">{icon_part}</div>
+                                        <div style="font-size: 12px; color: #64748b; margin-bottom: 6px;">{text_part}</div>
+                                        <div style="font-size: 13px; color: #ef4444;">최고: {row['최고기온']}°C</div>
+                                        <div style="font-size: 13px; color: #3b82f6;">최저: {row['최저기온']}°C</div>
+                                        <div style="font-size: 12px; color: #0f172a; margin-top: 4px;">💧 {row['강수량']}mm</div>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+
+                        # 기온 변화 추이 시각화 차트 추가
+                        st.write(" ")
+                        # ------------------------------------------------------------------------------
+                        # 📈 기온(선) 및 강수량(막대) 멀티 차트 렌더링 (ECharts 듀얼축 활용)
+                        # ------------------------------------------------------------------------------
+                        st.write(" ")
+
+                        x_data = weather_df["날짜"].tolist()
+                        max_temp = weather_df["최고기온"].tolist()
+                        min_temp = weather_df["최저기온"].tolist()
+                        precipitation = weather_df["강수량"].tolist()
+
+                        weather_chart_options = {
+                            "tooltip": {
+                                "trigger": "axis",
+                                "axisPointer": {"type": "cross"}
+                            },
+                            "legend": {
+                                "data": ["최고기온", "최저기온", "강수량"],
+                                "top": "0%"
+                            },
+                            "grid": {
+                                "top": "18%",
+                                "left": "5%",
+                                "right": "5%",
+                                "bottom": "10%",
+                                "containLabel": True
+                            },
+                            "xAxis": [
+                                {
+                                    "type": "category",
+                                    "data": x_data,
+                                    "axisPointer": {"type": "shadow"}
+                                }
+                            ],
+                            "yAxis": [
+                                {
+                                    "type": "value",
+                                    "name": "기온 (°C)",
+                                    "position": "left",
+                                    "axisLabel": {"formatter": "{value} °C"}
+                                },
+                                {
+                                    "type": "value",
+                                    "name": "강수량 (mm)",
+                                    "position": "right",
+                                    "splitLine": {"show": False},  # 배경 격자선 중복 방지
+                                    "axisLabel": {"formatter": "{value} mm"}
+                                }
+                            ],
+                            "series": [
+                                {
+                                    "name": "최고기온",
+                                    "type": "line",
+                                    "data": max_temp,
+                                    "itemStyle": {"color": "#ef4444"},  # 빨간 계열 (최고기온)
+                                    "lineStyle": {"width": 2}
+                                },
+                                {
+                                    "name": "최저기온",
+                                    "type": "line",
+                                    "data": min_temp,
+                                    "itemStyle": {"color": "#3b82f6"},  # 파란 계열 (최저기온)
+                                    "lineStyle": {"width": 2}
+                                },
+                                {
+                                    "name": "강수량",
+                                    "type": "bar",
+                                    "yAxisIndex": 1,  # 우측 Y축 사용
+                                    "data": precipitation,
+                                    "itemStyle": {
+                                        "color": "#93c5fd",  # 연한 하늘색 막대
+                                        "borderRadius": [4, 4, 0, 0]
+                                    },
+                                    "barWidth": "35%"
+                                }
+                            ]
+                        }
+
+                        st_echarts(options=weather_chart_options, height="500px", key="weather_multi_chart")
+                        # 📌 출처 및 면책 안내 문구 추가
+                        st.markdown(
+                            """
+                            <div style="
+                                font-size: 12px; 
+                                color: #64748b; 
+                                text-align: right; 
+                                margin-top: 4px; 
+                                margin-bottom: 16px;
+                            ">
+                                📊 <b>기상 데이터 출처:</b> Open-Meteo API (기상 재분석 모델)<br>
+                                ⚠️ 본 기상 정보는 글로벌 기상 모델을 기반으로 산출된 값으로, 실제 기상청 공식 실측값과는 다소 차이가 있을 수 있습니다.
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.info("ℹ️ 해당 측정 기간 내 조회된 날씨 데이터가 없습니다.")
+                else:
+                    st.warning("⚠️ 지정된 날짜 및 위치의 기상 데이터를 불러오지 못했습니다.")
+            else:
+                st.info("ℹ️ 측정 시작일자 또는 종료일자 형식(YYYYMMDD)이 올바르지 않습니다.")
+        except Exception as e:
+            st.warning(f"⚠️ 날씨 정보를 불러오는 중 오류가 발생했습니다: {e}")
+    else:
+        st.info("ℹ️ 해당 지점의 위도/경도 정보가 없어 날씨 정보를 불러올 수 없습니다.")
+
+    all_comments = fetch_all_comments(user_id, selected_work_no)
+
+    st.write(" ")
+    render_section_header("📅", "분석 요약", "Summary")
     st.write(" ")
 
     variables1 = {
@@ -784,6 +1136,89 @@ else:
     qr_h6 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekend_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_summary rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' GROUP BY rca.collect_date) t1"""
     qr_h7 = """SELECT avg(rca.stay_time) as stay_time FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 """
     qr_h8 = """SELECT AVG(t1.hourly_avg_stay) as stay_time FROM (SELECT rca.collect_hour, AVG(rca.stay_time) AS hourly_avg_stay FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 GROUP BY rca.collect_hour) t1;"""
+
+    # 1. 하루 평균 통행량 데이터 조회 (등급 판정용)
+    df_h2_res = conn.query(qr_h2.format(**variables1), ttl=600)
+    avg_daily_cnt = 0
+    if not df_h2_res.empty and df_h2_res.iloc[0, 0] is not None:
+        avg_daily_cnt = float(df_h2_res.iloc[0, 0])
+
+    # 2. 등급 판정 및 색상 설정 로직
+    if avg_daily_cnt >= 10000:
+        grade = "S"
+        grade_color = "#FF4B4B"  # 빨강
+    elif avg_daily_cnt >= 5000:
+        grade = "A"
+        grade_color = "#FF8C00"  # 주황
+    elif avg_daily_cnt >= 1000:
+        grade = "B"
+        grade_color = "#FFD000"  # 황갈/골드
+    elif avg_daily_cnt >= 500:
+        grade = "C"
+        grade_color = "#1E88E5"  # 파랑
+    else:
+        grade = "D"
+        grade_color = "#8E44AD"  # 보라
+
+    # 3. 등급 시각화 영역 (HTML/CSS로 색상 반영)
+    col_g1, col_g2 = st.columns([1, 2.5])
+
+    with col_g1:
+        st.markdown(
+            f"""
+            <div style="
+                background-color: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 10px;
+                padding: 12px;
+                text-align: center;
+                height: 150px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            ">
+                <div style="text-align: left; font-size: 20px; color: #6c757d; font-weight: bold; margin-bottom: 2px; margin-left: 10px;">
+                    트래픽 등급
+                </div>      
+                <div style="font-size: 50px; font-weight: 900; color: {grade_color}; line-height: 1.1;">
+                    {grade}
+                </div>          
+            </div>            
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col_g2:
+        st.markdown(
+            """
+            <div style="
+                background-color: #ffffff;
+                border: 1px solid #e9ecef;
+                border-radius: 10px;
+                padding: 14px 18px;
+                height: 150px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            ">
+                <div style="text-align: right; font-size: 14px; font-weight: bold; color: #495057; margin-bottom: 8px;">
+                    (기준 : 하루 평균)
+                </div>                
+                <div style="font-size: 20px; font-weight: 600; line-height: 1.6; text-align: center;">
+                    <span style="color: #FF4B4B;">S</span> : 1만명 이상 &nbsp;&nbsp;|&nbsp;&nbsp;
+                    <span style="color: #FF8C00;">A</span> : 5천명 이상 &nbsp;&nbsp;|&nbsp;&nbsp;
+                    <span style="color: #FFD000;">B</span> : 1천명 이상 &nbsp;&nbsp;|&nbsp;&nbsp;
+                    <span style="color: #1E88E5;">C</span> : 500명 이상 &nbsp;&nbsp;|&nbsp;&nbsp;
+                    <span style="color: #8E44AD;">D</span> : 100명 이하
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.write(" ")
+    st.write(" ")
+    st.write(" ")
 
     render_metric_cards(
         conn.query(qr_h1.format(**variables1), ttl=600),
@@ -816,39 +1251,39 @@ else:
 
     # 2. 시간대별 통행량 (주중/주말)
     qr3_combined = """
-    SELECT '주중' AS gubun, tt1.collect_hour, SUM(tt1.cnt) AS cnt 
-    FROM (
-        SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
+        SELECT '주중' AS gubun, tt1.collect_hour, SUM(tt1.cnt) AS cnt 
         FROM (
-            SELECT rca.collect_hour, rca.collect_date, SUM(rca.collect_cnt) AS cnt 
-            FROM rt_collect_summary rca 
-            JOIN rt_calendar c ON rca.collect_date = c.dt 
-            WHERE rca.user_id = '{id}' AND rca.work_no = {work_no}
-              and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' 
-              AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
-              AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday' 
-            GROUP BY rca.collect_hour, rca.collect_date
-        ) t1 GROUP BY t1.collect_hour
-    ) tt1 GROUP BY tt1.collect_hour
+            SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
+            FROM (
+                SELECT rca.collect_hour, rca.collect_date, SUM(rca.collect_cnt) AS cnt 
+                FROM rt_collect_summary rca 
+                JOIN rt_calendar c ON rca.collect_date = c.dt 
+                WHERE rca.user_id = '{id}' AND rca.work_no = {work_no}
+                  and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' 
+                  AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
+                  AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday' 
+                GROUP BY rca.collect_hour, rca.collect_date
+            ) t1 GROUP BY t1.collect_hour
+        ) tt1 GROUP BY tt1.collect_hour
 
-    UNION ALL
+        UNION ALL
 
-    SELECT '주말' AS gubun, tt1.collect_hour, SUM(tt1.cnt) AS cnt 
-    FROM (
-        SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
+        SELECT '주말' AS gubun, tt1.collect_hour, SUM(tt1.cnt) AS cnt 
         FROM (
-            SELECT rca.collect_hour, rca.collect_date, SUM(rca.collect_cnt) AS cnt 
-            FROM rt_collect_summary rca 
-            JOIN rt_calendar c ON rca.collect_date = c.dt 
-            WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} 
-              and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
-              AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
-              AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' 
-            GROUP BY rca.collect_hour, rca.collect_date
-        ) t1 GROUP BY t1.collect_hour
-    ) tt1 GROUP BY tt1.collect_hour
-    ORDER BY collect_hour
-    """
+            SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
+            FROM (
+                SELECT rca.collect_hour, rca.collect_date, SUM(rca.collect_cnt) AS cnt 
+                FROM rt_collect_summary rca 
+                JOIN rt_calendar c ON rca.collect_date = c.dt 
+                WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} 
+                  and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
+                  AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
+                  AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' 
+                GROUP BY rca.collect_hour, rca.collect_date
+            ) t1 GROUP BY t1.collect_hour
+        ) tt1 GROUP BY tt1.collect_hour
+        ORDER BY collect_hour
+        """
 
     chart_hour_weekday_weekend = {
         "chart_id": "hour_weekday_weekend",
@@ -1170,16 +1605,25 @@ else:
     render_chart_grid([chart_date], cols_per_row=1)
     st.write(" ")
     st.write(" ")
+    render_section_header("🕒", "시간대 분석", "Timeline Analysis")
     st.write(" ")
     st.write(" ")
     render_chart_grid([chart_hour_weekday_weekend], cols_per_row=1)
     st.write(" ")
     st.write(" ")
+    render_comment_box(all_comments, comment_key="com1")
+    st.write(" ")
+    st.write(" ")
+    render_section_header("🗓️", "요일 분석", "Week Analysis")
     st.write(" ")
     st.write(" ")
     render_chart_grid([chart_day_hour], cols_per_row=1)
     st.write(" ")
     st.write(" ")
+    render_comment_box(all_comments, comment_key="com2")
+    st.write(" ")
+    st.write(" ")
+    render_section_header("⏱️", "체류시간 분석", "Stay Time Analysis")
     st.write(" ")
     st.write(" ")
     render_chart_grid([chart_date_stay], cols_per_row=1)
@@ -1190,6 +1634,10 @@ else:
     render_chart_grid([chart_day_hour_stay_time], cols_per_row=1)
     st.write(" ")
     st.write(" ")
+    render_comment_box(all_comments, comment_key="com3")
+    st.write(" ")
+    st.write(" ")
+    render_section_header("🚻", "성별 분석", "Gender Analysis")
     st.write(" ")
     st.write(" ")
     render_chart_grid([chart_gender_day], cols_per_row=1)
@@ -1205,6 +1653,10 @@ else:
     render_chart_grid([chart_gender_hour_stay], cols_per_row=1)
     st.write(" ")
     st.write(" ")
+    render_comment_box(all_comments, comment_key="com4")
+    st.write(" ")
+    st.write(" ")
+    render_section_header("👥", "연령대 분석", "Age Analysis")
     st.write(" ")
     st.write(" ")
     render_chart_grid([chart_age_day], cols_per_row=1)
@@ -1215,6 +1667,10 @@ else:
     render_chart_grid([chart_age, chart_age_hour], cols_per_row=2)
     st.write(" ")
     st.write(" ")
+    render_comment_box(all_comments, comment_key="com5")
+    st.write(" ")
+    st.write(" ")
+    render_section_header("🚲", "기타 분석", "Additional Analysis")
     st.write(" ")
     st.write(" ")
     render_chart_grid([chart_direction_day], cols_per_row=1)
@@ -1228,3 +1684,9 @@ else:
     st.write(" ")
     st.write(" ")
     render_chart_grid([chart_pictorial, chart_etc_hour], cols_per_row=2)
+    render_comment_box(all_comments, comment_key="com6")
+    st.write(" ")
+    st.write(" ")
+    st.write(" ")
+    st.write(" ")
+    render_info_footer(logo_path_or_url="images/logo_wide.png")

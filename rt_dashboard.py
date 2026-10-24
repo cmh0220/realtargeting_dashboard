@@ -70,6 +70,7 @@ admin_check_page = st.Page(
 )
 
 # 로그인 실패 페이지
+# 사이드바에는 표시하지 않음
 loginfail_page = st.Page(
     "views/loginfail.py",
     title="   로그인 실패",
@@ -84,23 +85,23 @@ pdfdown_page = st.Page(
 
 today_page = st.Page(
     "views/today.py",
-    title="   일일 모니터링",
+    title="   일일 대시보드",
 )
 
 dashboard_page = st.Page(
     "views/dashboard.py",
-    title="   통합 대시보드",
+    title="   통합 보고서",
 )
 
-today_car_page = st.Page(
-    "views/today_car.py",
-    title="   일일 모니터링(준비중)",
-)
-
-dashboard_car_page = st.Page(
-    "views/dashboard_car.py",
-    title="   통합 대시보드(준비중)",
-)
+# today_car_page = st.Page(
+#     "views/today_car.py",
+#     title="   일일 모니터링(준비중)",
+# )
+#
+# dashboard_car_page = st.Page(
+#     "views/dashboard_car.py",
+#     title="   통합 대시보드(준비중)",
+# )
 
 
 # ===================================================================
@@ -116,14 +117,14 @@ if st.session_state.get("user_id") == "notreal":
 
 pages = {
     "🏠홈": home_pages,
-    "👨‍👩‍👧‍👦방문자분석": [
+    "👨‍👩 트래픽 분석": [
         today_page,
         dashboard_page,
     ],
-    "🚗차량분석": [
-        today_car_page,
-        dashboard_car_page,
-    ],
+    # "🚗 차량 분석": [
+    #     today_car_page,
+    #     dashboard_car_page,
+    # ],
     "": [
         loginfail_page,
         pdfdown_page,
@@ -180,20 +181,33 @@ def authenticate_user(user_id: str, password_raw: str) -> dict:
         user_info = user_df.iloc[0].to_dict()
 
         # 2. 열람 가능 지점 확인
-        info_sql = """
-            SELECT
-                work_no,
-                location,
-                memo,
-                user_company,
-                view_start_date,
-                view_end_date
-            FROM rt_collect_info
-            WHERE user_id = :user_id
-              AND view_yn = 1
-              AND DATE_FORMAT(NOW(), '%Y%m%d')
-                  BETWEEN view_start_date AND view_end_date
-        """
+        if user_id in ["notreal", "admin"]:
+            info_sql = """
+                        SELECT
+                            work_no,
+                            location,
+                            memo,
+                            user_company,
+                            view_start_date,
+                            view_end_date
+                        FROM rt_collect_info
+                        WHERE user_id = :user_id
+                    """
+        else:
+            info_sql = """
+                        SELECT
+                            work_no,
+                            location,
+                            memo,
+                            user_company,
+                            view_start_date,
+                            view_end_date
+                        FROM rt_collect_info
+                        WHERE user_id = :user_id
+                          AND view_yn = 1
+                          AND DATE_FORMAT(NOW(), '%Y%m%d')
+                              BETWEEN view_start_date AND view_end_date
+                    """
 
         info_df = conn.query(
             info_sql,

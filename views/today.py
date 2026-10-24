@@ -312,7 +312,7 @@ st.logo("images/logo_wide.png", size="large", link="https://realtargeting.stream
 
 conn = st.connection("mysql", type="sql")
 
-st.subheader("일일 모니터링", divider="blue")
+st.subheader("일일 대시보드", divider="blue")
 
 # 인증 확인 및 로그인 계정의 전체 권한 지점 목록 가져오기
 user_id = st.session_state.get("user_id")
@@ -322,6 +322,11 @@ if not user_id or not work_list:
     st.error("⚠️ 로그인 정보가 없거나 열람 가능한 지점이 없습니다. 사이드바에서 먼저 로그인해 주세요.")
     st.stop()
 else:
+
+    if user_id in ['notreal', 'admin']:
+        variables = {'work_no' : st.session_state.get("selected_work_no")}
+        qr_special = """ select user_id from rt_collect_info where work_no = {work_no}"""
+        user_id = conn.query(qr_special.format(**variables), ttl=600).iloc[0, 0]
 
     # 1. 메인 화면에서 전달된 기본 선택 지점(work_no) 확인
     default_work_no = st.session_state.get("selected_work_no")
