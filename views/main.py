@@ -280,6 +280,9 @@ else:
                 st.switch_page("views/dashboard.py")
 
         if btn_multi:
+            st.warning("⚠️ 다중분석 메뉴는 현재 서비스 준비중입니다.")
+            st.stop()
+
             # 방어 코드: 다중 선택 개수가 2~4개가 아닌 경우 차단
             if not (2 <= valid_count <= 4):
                 st.warning("⚠️ 다중 분석할 지점을 2개에서 4개 사이로 선택해 주세요.")
