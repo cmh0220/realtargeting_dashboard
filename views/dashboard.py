@@ -22,7 +22,7 @@ def install_playwright_browser():
 
 
 # 앱 실행 시 1회 자동 설치
-install_playwright_browser()
+# install_playwright_browser()
 
 
 # 2. PDF 생성 핵심 함수
