@@ -39,7 +39,7 @@ def get_pdf_bytes(user_id: str, work_no: str):
         )
 
         # 🎯 export_mode=true, user_id, work_no 3개 파라미터를 URL에 같이 주입
-        target_url = f"https://realtargeting.streamlit.app/dashboard_pdf?export_mode=true&user_id={user_id}&work_no={work_no}"
+        target_url = f"http://http://localhost:8501/dashboard_pdf?export_mode=true&user_id={user_id}&work_no={work_no}"
         page.goto(target_url, wait_until='networkidle', timeout=60000)
 
         # ECharts 및 Folium 렌더링 완성 대기 (2초)
@@ -866,12 +866,13 @@ else:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
 
         st.download_button(
-            label="💾 PDF 다운로드",
+            label="💾 PDF 다운(서비스 준비중)",
             data=lambda: get_pdf_bytes(user_id, selected_work_no),
             file_name=f"리얼타겟팅 보고서_{user_id}_{selected_work_no}.pdf",
             mime="application/pdf",
             type="primary",
-            use_container_width=True
+            use_container_width=True,
+            disabled=True
         )
 
     st.session_state["selected_work_no"] = selected_work_no
