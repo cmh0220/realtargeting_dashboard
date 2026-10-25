@@ -39,11 +39,11 @@ def get_pdf_bytes(user_id: str, work_no: str):
         )
 
         # 🎯 export_mode=true, user_id, work_no 3개 파라미터를 URL에 같이 주입
-        target_url = f"http://localhost:8501/dashboard_pdf?export_mode=true&user_id={user_id}&work_no={work_no}"
+        target_url = f"https://realtargeting.streamlit.app/dashboard_pdf?export_mode=true&user_id={user_id}&work_no={work_no}"
         page.goto(target_url, wait_until='networkidle', timeout=60000)
 
         # ECharts 및 Folium 렌더링 완성 대기 (2초)
-        page.wait_for_timeout(2000)
+        page.wait_for_timeout(7000)
 
         pdf_bytes = page.pdf(
             format='A4',
@@ -970,38 +970,41 @@ else:
                     weather_df["상태"] = weather_df["날씨코드"].apply(get_weather_icon)
 
                     # 일자별 카드 형태로 그리드 표시 (최대 7일씩 행 분할 등 처리)
+                    # 일자별 카드 형태로 그리드 표시 (최대 7일씩 행 분할 등 처리)
                     num_days = len(weather_df)
                     if num_days > 0:
-                        # 화면 너비에 맞게 최대 7열씩 나누어 출력
-                        cols = st.columns(min(num_days, 7))
-                        for idx, row in weather_df.iterrows():
-                            col_idx = idx % 7
-                            if col_idx == 0 and idx > 0:
-                                cols = st.columns(min(num_days - idx, 7))
+                        # 💡 st.expander를 활용해 기본적으로 접혀(expanded=False) 있도록 구현
+                        with st.expander(f"📅 일자별 상세 날씨 정보 보기 (총 {num_days}일)", expanded=False):
+                            # 화면 너비에 맞게 최대 7열씩 나누어 출력
+                            cols = st.columns(min(num_days, 7))
+                            for idx, row in weather_df.iterrows():
+                                col_idx = idx % 7
+                                if col_idx == 0 and idx > 0:
+                                    cols = st.columns(min(num_days - idx, 7))
 
-                            with cols[col_idx]:
-                                icon_part = row["상태"].split()[0]
-                                text_part = row["상태"].split()[1] if len(row["상태"].split()) > 1 else ""
-                                st.markdown(
-                                    f"""
-                                    <div style="
-                                        background-color: #f8f9fa;
-                                        border: 1px solid #e2e8f0;
-                                        border-radius: 6px;
-                                        padding: 10px;
-                                        text-align: center;
-                                        margin-bottom: 10px;
-                                    ">
-                                        <div style="font-size: 13px; font-weight: bold; color: #475569;">{row['날짜']}</div>
-                                        <div style="font-size: 24px; margin: 4px 0;">{icon_part}</div>
-                                        <div style="font-size: 12px; color: #64748b; margin-bottom: 6px;">{text_part}</div>
-                                        <div style="font-size: 13px; color: #ef4444;">최고: {row['최고기온']}°C</div>
-                                        <div style="font-size: 13px; color: #3b82f6;">최저: {row['최저기온']}°C</div>
-                                        <div style="font-size: 12px; color: #0f172a; margin-top: 4px;">💧 {row['강수량']}mm</div>
-                                    </div>
-                                    """,
-                                    unsafe_allow_html=True
-                                )
+                                with cols[col_idx]:
+                                    icon_part = row["상태"].split()[0]
+                                    text_part = row["상태"].split()[1] if len(row["상태"].split()) > 1 else ""
+                                    st.markdown(
+                                        f"""
+                                                        <div style="
+                                                            background-color: #f8f9fa;
+                                                            border: 1px solid #e2e8f0;
+                                                            border-radius: 6px;
+                                                            padding: 10px;
+                                                            text-align: center;
+                                                            margin-bottom: 10px;
+                                                        ">
+                                                            <div style="font-size: 13px; font-weight: bold; color: #475569;">{row['날짜']}</div>
+                                                            <div style="font-size: 24px; margin: 4px 0;">{icon_part}</div>
+                                                            <div style="font-size: 12px; color: #64748b; margin-bottom: 6px;">{text_part}</div>
+                                                            <div style="font-size: 13px; color: #ef4444;">최고: {row['최고기온']}°C</div>
+                                                            <div style="font-size: 13px; color: #3b82f6;">최저: {row['최저기온']}°C</div>
+                                                            <div style="font-size: 12px; color: #0f172a; margin-top: 4px;">💧 {row['강수량']}mm</div>
+                                                        </div>
+                                                        """,
+                                        unsafe_allow_html=True
+                                    )
 
                         # 기온 변화 추이 시각화 차트 추가
                         st.write(" ")
@@ -1129,19 +1132,75 @@ else:
     # A. Metric 상단 지표 조회 및 렌더링
     # --------------------------------------------------------------------------
     qr_h1 = """SELECT sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 """
-    qr_h2 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 GROUP BY rca.collect_date) t1"""
+    qr_h2 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date) t1"""
     qr_h3 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' and (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
     qr_h4 = """SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
-    qr_h5 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekday_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_summary rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday' GROUP BY rca.collect_date) t1"""
-    qr_h6 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekend_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_summary rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' GROUP BY rca.collect_date) t1"""
+    qr_h5 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekday_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_summary rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday' GROUP BY rca.collect_date) t1"""
+    qr_h6 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekend_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_summary rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' GROUP BY rca.collect_date) t1"""
     qr_h7 = """SELECT avg(rca.stay_time) as stay_time FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 """
     qr_h8 = """SELECT AVG(t1.hourly_avg_stay) as stay_time FROM (SELECT rca.collect_hour, AVG(rca.stay_time) AS hourly_avg_stay FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 GROUP BY rca.collect_hour) t1;"""
 
-    # 1. 하루 평균 통행량 데이터 조회 (등급 판정용)
-    df_h2_res = conn.query(qr_h2.format(**variables1), ttl=600)
-    avg_daily_cnt = 0
-    if not df_h2_res.empty and df_h2_res.iloc[0, 0] is not None:
-        avg_daily_cnt = float(df_h2_res.iloc[0, 0])
+    # 1. 단 1회 통합 조회 쿼리 실행
+    qr_all = """
+    SELECT 
+        rca.collect_date, 
+        rca.collect_hour, 
+        rca.collect_cnt, 
+        rca.stay_time,
+        c.anal_gubun
+    FROM rt_collect_summary rca 
+    LEFT JOIN rt_calendar c ON rca.collect_date = c.dt
+    WHERE rca.user_id = '{id}' 
+      AND rca.work_no = {work_no} 
+      AND rca.collect_date >= '{start_date_str}' 
+      AND rca.collect_date <= '{end_date_str}' 
+      AND rca.collect_hour >= '{start_time_str}' 
+      AND rca.collect_hour < '{end_time_str}' 
+      AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
+      AND rca.del_yn = 0
+    """
+
+    df = conn.query(qr_all.format(**variables1), ttl=600)
+
+    # 2. 데이터가 없을 경우 기본값 설정 및 Pandas 연산
+    if df.empty:
+        h1_cnt, h2_avg, h3_avg, h4_avg, h5_weekday, h6_weekend, h7_stay, h8_stay = 0, 0, 0, 0, 0, 0, 0.0, 0.0
+        avg_daily_cnt = 0.0
+    else:
+        # [h1] 전체 총 통행량
+        h1_cnt = int(df["collect_cnt"].sum())
+
+        # [h2] 일평균 통행량 (등급 판정용 겸용)
+        df_daily = df.groupby("collect_date")["collect_cnt"].sum().reset_index()
+        avg_daily_cnt = float(df_daily["collect_cnt"].mean()) if not df_daily.empty else 0.0
+        h2_avg = round(avg_daily_cnt)
+
+        # [h3] 시간대별 일평균 통행량
+        df_hourly = df.groupby(["collect_date", "collect_hour"])["collect_cnt"].sum().reset_index()
+        h3_avg = round(df_hourly["collect_cnt"].mean()) if not df_hourly.empty else 0
+
+        # [h4] 분당 통행량 평균
+        h4_avg = round(h3_avg / 60) if h3_avg > 0 else 0
+
+        # [h5] 평일 평균
+        df_weekday = df[df["anal_gubun"] == "Weekday"]
+        h5_weekday = round(
+            df_weekday.groupby("collect_date")["collect_cnt"].sum().mean()) if not df_weekday.empty else 0
+
+        # [h6] 주말 평균
+        df_weekend = df[df["anal_gubun"] == "Weekend"]
+        h6_weekend = round(
+            df_weekend.groupby("collect_date")["collect_cnt"].sum().mean()) if not df_weekend.empty else 0
+
+        # [h7] 체류시간 평균 (99999 제외)
+        df_stay = df[df["stay_time"] != 99999]
+        h7_stay = float(df_stay["stay_time"].mean()) if not df_stay.empty else 0.0
+
+        # [h8] 시간당 체류시간 평균의 평균 (99999 제외)
+        if not df_stay.empty:
+            h8_stay = float(df_stay.groupby("collect_hour")["stay_time"].mean().mean()) if not df_stay.empty else 0.0
+        else:
+            h8_stay = 0.0
 
     # 2. 등급 판정 및 색상 설정 로직
     if avg_daily_cnt >= 10000:
@@ -1220,15 +1279,16 @@ else:
     st.write(" ")
     st.write(" ")
 
+    # 5. 기존 함수 규격에 맞게 1행짜리 DataFrame으로 포장해서 전달
     render_metric_cards(
-        conn.query(qr_h1.format(**variables1), ttl=600),
-        conn.query(qr_h2.format(**variables1), ttl=600),
-        conn.query(qr_h3.format(**variables1), ttl=600),
-        conn.query(qr_h4.format(**variables1), ttl=600),
-        conn.query(qr_h5.format(**variables1), ttl=600),
-        conn.query(qr_h6.format(**variables1), ttl=600),
-        conn.query(qr_h7.format(**variables1), ttl=600),
-        conn.query(qr_h8.format(**variables1), ttl=600),
+        pd.DataFrame({"val": [h1_cnt]}),
+        pd.DataFrame({"val": [h2_avg]}),
+        pd.DataFrame({"val": [h3_avg]}),
+        pd.DataFrame({"val": [h4_avg]}),
+        pd.DataFrame({"val": [h5_weekday]}),
+        pd.DataFrame({"val": [h6_weekend]}),
+        pd.DataFrame({"val": [h7_stay]}),
+        pd.DataFrame({"val": [h8_stay]})
     )
     st.write(" ")
 
@@ -1251,6 +1311,7 @@ else:
 
     # 2. 시간대별 통행량 (주중/주말)
     qr3_combined = """
+        -- 1. 주중 (Weekday)
         SELECT '주중' AS gubun, tt1.collect_hour, SUM(tt1.cnt) AS cnt 
         FROM (
             SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
@@ -1259,7 +1320,8 @@ else:
                 FROM rt_collect_summary rca 
                 JOIN rt_calendar c ON rca.collect_date = c.dt 
                 WHERE rca.user_id = '{id}' AND rca.work_no = {work_no}
-                  and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' 
+                  AND rca.collect_date >= '{start_date_str}' AND rca.collect_date <= '{end_date_str}' 
+                  AND rca.collect_hour >= '{start_time_str}' AND rca.collect_hour < '{end_time_str}' 
                   AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
                   AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday' 
                 GROUP BY rca.collect_hour, rca.collect_date
@@ -1268,6 +1330,7 @@ else:
 
         UNION ALL
 
+        -- 2. 주말 (Weekend)
         SELECT '주말' AS gubun, tt1.collect_hour, SUM(tt1.cnt) AS cnt 
         FROM (
             SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
@@ -1276,18 +1339,38 @@ else:
                 FROM rt_collect_summary rca 
                 JOIN rt_calendar c ON rca.collect_date = c.dt 
                 WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} 
-                  and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
+                  AND rca.collect_date >= '{start_date_str}' AND rca.collect_date <= '{end_date_str}' 
+                  AND rca.collect_hour >= '{start_time_str}' AND rca.collect_hour < '{end_time_str}'
                   AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
                   AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' 
                 GROUP BY rca.collect_hour, rca.collect_date
             ) t1 GROUP BY t1.collect_hour
         ) tt1 GROUP BY tt1.collect_hour
-        ORDER BY collect_hour
-        """
+
+        UNION ALL
+
+        -- 3. 전체 (Total - 평일+주말 구분 없는 전체 기준)
+        SELECT '전체' AS gubun, tt1.collect_hour, SUM(tt1.cnt) AS cnt 
+        FROM (
+            SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt 
+            FROM (
+                SELECT rca.collect_hour, rca.collect_date, SUM(rca.collect_cnt) AS cnt 
+                FROM rt_collect_summary rca 
+                WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} 
+                  AND rca.collect_date >= '{start_date_str}' AND rca.collect_date <= '{end_date_str}' 
+                  AND rca.collect_hour >= '{start_time_str}' AND rca.collect_hour < '{end_time_str}'
+                  AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
+                  AND rca.del_yn = 0 
+                GROUP BY rca.collect_hour, rca.collect_date
+            ) t1 GROUP BY t1.collect_hour
+        ) tt1 GROUP BY tt1.collect_hour
+
+        ORDER BY collect_hour, gubun
+    """
 
     chart_hour_weekday_weekend = {
         "chart_id": "hour_weekday_weekend",
-        "title": "주중/주말 시간대별 평균 통행량",
+        "title": "시간대별 평균 통행량",
         "type": "echarts_multi_line",
         "df": conn.query(qr3_combined.format(**variables1), ttl=600),
         "index_col": "collect_hour",
