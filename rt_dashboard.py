@@ -85,22 +85,22 @@ pdfdown_page = st.Page(
 
 today_page = st.Page(
     "views/today.py",
-    title="   일일 대시보드",
+    title="   실시간 대시보드",
 )
 
 dashboard_page = st.Page(
     "views/dashboard.py",
-    title="   통합 보고서",
+    title="   분석 보고서",
 )
 
 # today_car_page = st.Page(
 #     "views/today_car.py",
-#     title="   일일 모니터링(준비중)",
+#     title="   실시간 모니터링(준비중)",
 # )
 #
 # dashboard_car_page = st.Page(
 #     "views/dashboard_car.py",
-#     title="   통합 대시보드(준비중)",
+#     title="   분석 대시보드(준비중)",
 # )
 
 

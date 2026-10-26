@@ -121,7 +121,7 @@ else:
     company_name = st.session_state.get("company_name", "고객사")
     user_name = st.session_state.get("user_name", "고객명")
     st.subheader(
-        f"📊 {user_name}님[{company_name}] 서비스 현황", divider="blue"
+        f"📊 {user_name} 님[{company_name}] 서비스 현황", divider="blue"
     )
 
     df_info = get_collect_info_list(user_id)
@@ -177,7 +177,7 @@ else:
         elif invalid_selected_count > 0:
             st.error(f"⚠️ 선택된 지점 중 분석 불가능한 상태(진행/완료 외)인 지점이 {invalid_selected_count}개 포함되어 있습니다.")
         elif valid_count == 1:
-            st.success("✅ 1개 지점 선택됨: [일일 모니터링] 또는 [통합 대시보드] 이동 가능")
+            st.success("✅ 1개 지점 선택됨: [실시간 대시보드] 또는 [분석 보고서] 이동 가능")
         elif 2 <= valid_count <= 4:
             st.success(f"✅ {valid_count}개 지점 선택됨: [다중 분석] 이동 가능")
         else:
@@ -212,7 +212,7 @@ else:
 
         with btn_col2:
             btn_dashboard = st.button(
-                "📊 통합 대시보드",
+                "📊 분석 보고서",
                 disabled=not is_single_valid,
                 width="stretch",
                 type="primary" if is_single_valid else "secondary",

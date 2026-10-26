@@ -326,7 +326,7 @@ else:
     if user_id in ['notreal', 'admin']:
         variables = {'work_no' : st.session_state.get("selected_work_no")}
         qr_special = """ select user_id from rt_collect_info where work_no = {work_no}"""
-        user_id = conn.query(qr_special.format(**variables), ttl=600).iloc[0, 0]
+        user_id = conn.query(qr_special.format(**variables), ttl=0).iloc[0, 0]
 
     # 1. 메인 화면에서 전달된 기본 선택 지점(work_no) 확인
     default_work_no = st.session_state.get("selected_work_no")
@@ -416,10 +416,10 @@ else:
     qr_h7 = """SELECT avg(rca.stay_time) as stay_time FROM rt_collect_all rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.collect_date = '{today}' AND rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' and (rca.class like 'm%' OR rca.class like 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 """
 
     render_metric_cards(
-        conn.query(qr_h2.format(**variables), ttl=600),
-        conn.query(qr_h3.format(**variables), ttl=600),
-        conn.query(qr_h4.format(**variables), ttl=600),
-        conn.query(qr_h7.format(**variables), ttl=600),
+        conn.query(qr_h2.format(**variables), ttl=0),
+        conn.query(qr_h3.format(**variables), ttl=0),
+        conn.query(qr_h4.format(**variables), ttl=0),
+        conn.query(qr_h7.format(**variables), ttl=0),
     )
     st.write(" ")
 
@@ -457,7 +457,7 @@ else:
         "chart_id": "daily_hour_traffic",
         "title": "시간대별 통행량",
         "type": "echarts_line",
-        "df": conn.query(qr_hour.format(**variables), ttl=600),
+        "df": conn.query(qr_hour.format(**variables), ttl=0),
         "x_col": "collect_hour",
         "y_col": "cnt",
         "y_name": "통행량",
@@ -467,7 +467,7 @@ else:
         "chart_id": "daily_hour_stay_time",
         "title": "시간대별 체류시간",
         "type": "echarts_line",
-        "df": conn.query(qr_hour.format(**variables), ttl=600),
+        "df": conn.query(qr_hour.format(**variables), ttl=0),
         "x_col": "collect_hour",
         "y_col": "stay_time",
         "y_name": "체류시간",
@@ -494,7 +494,7 @@ else:
         "chart_id": "daily_gender_pie",
         "title": "성별 통행량 비율",
         "type": "echarts_pie",
-        "df": conn.query(qr_gender.format(**variables), ttl=600),
+        "df": conn.query(qr_gender.format(**variables), ttl=0),
         "name_col": "gender",
         "value_col": "cnt",
         "semi_pie": "up",
@@ -523,7 +523,7 @@ else:
         "chart_id": "daily_gender_hour",
         "title": "성별/시간대별 통행량",
         "type": "echarts_multi_line",
-        "df": conn.query(qr_gender_hour.format(**variables), ttl=600),
+        "df": conn.query(qr_gender_hour.format(**variables), ttl=0),
         "index_col": "collect_hour",
         "columns_col": "gender",
         "values_col": "cnt",
@@ -549,7 +549,7 @@ else:
         "chart_id": "daily_age_pie",
         "title": "연령별 통행량 비율",
         "type": "echarts_pie",
-        "df": conn.query(qr_age.format(**variables), ttl=600),
+        "df": conn.query(qr_age.format(**variables), ttl=0),
         "name_col": "age",
         "value_col": "cnt",
     }
@@ -575,7 +575,7 @@ else:
         "chart_id": "daily_age_hour",
         "title": "연령별/시간대별 통행량",
         "type": "echarts_multi_line",
-        "df": conn.query(qr_age_hour.format(**variables), ttl=600),
+        "df": conn.query(qr_age_hour.format(**variables), ttl=0),
         "index_col": "collect_hour",
         "columns_col": "age",
         "values_col": "cnt",
