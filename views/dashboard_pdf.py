@@ -1509,7 +1509,7 @@ else:
           AND rca.del_yn = 0
         """
 
-    df = conn.query(qr_all.format(**variables1), ttl=600)
+    df = conn.query(qr_all.format(**variables1), ttl=0)
 
     # 2. 데이터가 없을 경우 기본값 설정 및 Pandas 연산
     if df.empty:
@@ -1651,7 +1651,7 @@ else:
         "chart_id": "date_traffic",
         "title": "일자별 통행량",
         "type": "bar",
-        "df": conn.query(qr1.format(**variables1), ttl=600),
+        "df": conn.query(qr1.format(**variables1), ttl=0),
         "x": "collect_date",
         "y": "cnt",
         "x_label": "일자",
@@ -1722,7 +1722,7 @@ else:
         "chart_id": "hour_weekday_weekend",
         "title": "시간대별 평균 통행량",
         "type": "echarts_multi_line",
-        "df": conn.query(qr3_combined.format(**variables1), ttl=600),
+        "df": conn.query(qr3_combined.format(**variables1), ttl=0),
         "index_col": "collect_hour",
         "columns_col": "gubun",
         "values_col": "cnt",
@@ -1736,7 +1736,7 @@ else:
         "chart_id": "date_stay",
         "title": "일자별 평균 체류시간",
         "type": "bar",
-        "df": conn.query(qr1_stay_perday.format(**variables1), ttl=600),
+        "df": conn.query(qr1_stay_perday.format(**variables1), ttl=0),
         "x": "collect_date",
         "y": "cnt",
         "x_label": "일자",
@@ -1750,7 +1750,7 @@ else:
         "chart_id": "day_hour_traffic",
         "title": "요일별/시간대별 평균 통행량",
         "type": "echarts_multi_line",
-        "df": conn.query(qr2.format(**variables1), ttl=600),
+        "df": conn.query(qr2.format(**variables1), ttl=0),
         "index_col": "collect_hour",
         "columns_col": "collect_day",
         "values_col": "cnt",
@@ -1763,7 +1763,7 @@ else:
         "chart_id": "day_hour_stay",
         "title": "요일별/시간대별 평균 체류시간",
         "type": "echarts_multi_line",
-        "df": conn.query(qr20.format(**variables1), ttl=600),
+        "df": conn.query(qr20.format(**variables1), ttl=0),
         "index_col": "collect_hour",
         "columns_col": "collect_day",
         "values_col": "stay_time",
@@ -1784,7 +1784,7 @@ else:
     chart_gender_day = {
         "title": "일자별 성별 통행량 분석",
         "type": "echarts_multi_bar_gender",
-        "df": conn.query(qr20_1.format(**variables1), ttl=600),
+        "df": conn.query(qr20_1.format(**variables1), ttl=0),
         "index_col": "collect_date",  # X축이 될 열 이름 (예: 일자)
         "columns_col": "gender",  # 범례(남/여)로 분리할 열 이름
         "values_col": "cnt",  # 수치 값이 들어있는 열 이름
@@ -1798,7 +1798,7 @@ else:
         "chart_id": "gender_pie",
         "title": "성별 통행량",
         "type": "echarts_pie",
-        "df": conn.query(qr21.format(**variables1), ttl=600),
+        "df": conn.query(qr21.format(**variables1), ttl=0),
         "name_col": "gender",
         "value_col": "cnt",
         "semi_pie": None,
@@ -1833,7 +1833,7 @@ else:
         "chart_id": "gender_hour",
         "title": "성별/시간대별 평균 통행량",
         "type": "echarts_multi_line",
-        "df": conn.query(qr22.format(**variables1), ttl=600),
+        "df": conn.query(qr22.format(**variables1), ttl=0),
         "index_col": "collect_hour",
         "columns_col": "gender",
         "values_col": "cnt",
@@ -1869,7 +1869,7 @@ else:
         "chart_id": "gender_hour_stay",
         "title": "성별/시간대별 평균 체류시간",
         "type": "echarts_multi_line",
-        "df": conn.query(qr25.format(**variables1), ttl=600),
+        "df": conn.query(qr25.format(**variables1), ttl=0),
         "index_col": "collect_hour",
         "columns_col": "gender",
         "values_col": "stay_time",
@@ -1890,7 +1890,7 @@ else:
     chart_age_day = {
         "title": "일자별 연령별 통행량 분석",
         "type": "echarts_multi_bar_age",
-        "df": conn.query(qr23_1.format(**variables1), ttl=600),
+        "df": conn.query(qr23_1.format(**variables1), ttl=0),
         "index_col": "collect_date",  # X축이 될 열 이름 (예: 일자)
         "columns_col": "age",  # 연령대
         "values_col": "cnt",  # 수치 값이 들어있는 열 이름
@@ -1905,7 +1905,7 @@ else:
         "chart_id": "age_pie",
         "title": "연령별 통행량",
         "type": "echarts_pie",
-        "df": conn.query(qr23.format(**variables1), ttl=600),
+        "df": conn.query(qr23.format(**variables1), ttl=0),
         "name_col": "age",
         "value_col": "cnt",
         "semi_pie": None,
@@ -1917,7 +1917,7 @@ else:
         "chart_id": "age_hour",
         "title": "연령별(시간대) 평균 통행량",
         "type": "echarts_multi_line",
-        "df": conn.query(qr24.format(**variables1), ttl=600),
+        "df": conn.query(qr24.format(**variables1), ttl=0),
         "index_col": "hour",
         "columns_col": "age",
         "values_col": "cnt",
@@ -1931,7 +1931,7 @@ else:
         "chart_id": "age_hour_stay",
         "title": "연령별(시간대) 평균 체류시간",
         "type": "echarts_multi_line",
-        "df": conn.query(qr24_s.format(**variables1), ttl=600),
+        "df": conn.query(qr24_s.format(**variables1), ttl=0),
         "index_col": "hour",
         "columns_col": "age",
         "values_col": "stay_time",
@@ -1952,7 +1952,7 @@ else:
     chart_direction_day = {
         "title": "일자별 방향별 통행량 분석",
         "type": "echarts_multi_bar_direction",
-        "df": conn.query(qr30.format(**variables1), ttl=600),
+        "df": conn.query(qr30.format(**variables1), ttl=0),
         "index_col": "collect_date",  # X축이 될 열 이름 (예: 일자)
         "columns_col": "direction",  # 방향
         "values_col": "cnt",  # 수치 값이 들어있는 열 이름
@@ -1967,7 +1967,7 @@ else:
         "chart_id": "direction_pie",
         "title": "방향별 통행량",
         "type": "echarts_pie",
-        "df": conn.query(qr31.format(**variables1), ttl=600),
+        "df": conn.query(qr31.format(**variables1), ttl=0),
         "name_col": "direction",
         "value_col": "cnt",
         "semi_pie": None,
@@ -1979,7 +1979,7 @@ else:
         "chart_id": "dir_hour",
         "title": "방향별(시간대) 평균 통행량",
         "type": "echarts_multi_line",
-        "df": conn.query(qr32.format(**variables1), ttl=600),
+        "df": conn.query(qr32.format(**variables1), ttl=0),
         "index_col": "collect_hour",
         "columns_col": "direction",
         "values_col": "cnt",
@@ -2007,7 +2007,7 @@ else:
         "chart_id": "pictorial_features",
         "title": "기타 객체 통행량 분석",
         "type": "echarts_icon_bar",  # 👈 타입 변경
-        "df": conn.query(qr_pictorial.format(**variables1), ttl=600),
+        "df": conn.query(qr_pictorial.format(**variables1), ttl=0),
         "name_col": "class",
         "value_col": "cnt",
         "chart_height": 450
@@ -2038,7 +2038,7 @@ else:
         "chart_id": "etc_hour",
         "title": "기타 객체(시간대) 평균 통행량",
         "type": "echarts_multi_line",
-        "df": conn.query(qr99.format(**variables1), ttl=600),
+        "df": conn.query(qr99.format(**variables1), ttl=0),
         "index_col": "collect_hour",
         "columns_col": "class",
         "values_col": "cnt",
