@@ -826,7 +826,7 @@ def render_chart_grid(
 st.logo(
     "images/logo_wide.png",
     size="large",
-    link="https://realtargeting.streamlit.app",
+    link="https://report.realtargeting.co.kr",
 )
 
 conn = st.connection("mysql", type="sql")

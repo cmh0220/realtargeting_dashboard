@@ -360,7 +360,7 @@ def myclear():
 st.logo(
     "images/logo_wide.png",
     size="large",
-    link="https://realtargeting.streamlit.app",
+    link="https://report.realtargeting.co.kr",
 )
 
 
