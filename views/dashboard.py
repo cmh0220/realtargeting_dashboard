@@ -912,8 +912,8 @@ else:
     # 🌟 [추가 기능] 측정 기간 일자별 날씨 정보 연동 영역
     # ------------------------------------------------------------------------------
     st.subheader("🌦️ 측정 기간 일자별 날씨 정보", divider="gray")
+    st.write(" ")
 
-    # 1. 지점 위도/경도 좌표 추출
     lat_val = selected_work_info.get("위도") or selected_work_info.get("latitude")
     lng_val = selected_work_info.get("경도") or selected_work_info.get("longitude")
 
@@ -922,20 +922,22 @@ else:
             lat_float = float(lat_val)
             lng_float = float(lng_val)
 
-            # 2. 시작일자/종료일자 문자열(YYYYMMDD)을 API 포맷(YYYY-MM-DD)으로 변환
             if len(start_date_str) == 8 and len(end_date_str) == 8:
                 api_start_date = f"{start_date_str[:4]}-{start_date_str[4:6]}-{start_date_str[6:]}"
                 api_end_date = f"{end_date_str[:4]}-{end_date_str[4:6]}-{end_date_str[6:]}"
 
-                # 💡 [추가] 종료일이 오늘(또는 어제)보다 미래일 경우, 조회 가능한 최대 과거 날짜(어제)로 자동 조정
+                # 종료일 미래 날짜 방지 로직
                 max_available_date = date.today() - timedelta(days=1)
+                max_available_date = str(max_available_date).replace("-", "").strip()
+
                 try:
-                    parsed_end_date = datetime.strptime(api_end_date, "%Y-%m-%d").date()
-                    if parsed_end_date > max_available_date:
-                        api_end_date = max_available_date.strftime("%Y-%m-%d")
-                        # 시작일이 조정된 종료일보다 이후가 되는 경우 방지
-                        if api_start_date > api_end_date:
+
+                    if end_date_str > max_available_date:
+                        api_end_date = f"{max_available_date[:4]}-{max_available_date[4:6]}-{max_available_date[6:]}"
+
+                        if start_date_str > max_available_date:
                             api_start_date = api_end_date
+
                 except Exception:
                     pass
 

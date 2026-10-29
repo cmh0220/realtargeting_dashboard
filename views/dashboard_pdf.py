@@ -10,6 +10,37 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import pandas as pd
 import requests
 
+
+# 3. Open-Meteo API 호출 함수
+@st.cache_data
+def fetch_weather_range(lat, lon, start, end):
+    url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start}&end_date={end}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&timezone=Asia%2FSeoul"
+    try:
+        res = requests.get(url, timeout=10)
+        if res.status_code == 200:
+            return res.json()
+    except Exception:
+        pass
+    return None
+
+
+# WMO 날씨 코드를 아이콘 및 한글 상태로 매핑
+def get_weather_icon(code):
+    if code == 0:
+        return "☀️ 맑음"
+    elif code in [1, 2, 3]:
+        return "⛅ 구름/흐림"
+    elif code in [45, 48]:
+        return "🌫️ 안개"
+    elif code in [51, 53, 55, 56, 57, 61, 63, 65, 66, 67]:
+        return "🌧️ 비"
+    elif code in [71, 73, 75, 77, 85, 86]:
+        return "❄️ 눈"
+    elif code >= 95:
+        return "⛈️ 천둥번개"
+    else:
+        return "🌡️ 기타"
+
 # Helper 함수: YYYYMMDD -> YYYY-MM-DD
 def format_date_str(date_str):
     if date_str and len(str(date_str)) == 8:
@@ -1248,7 +1279,7 @@ else:
     # ------------------------------------------------------------------------------
     st.subheader("🌦️ 측정 기간 일자별 날씨 정보", divider="gray")
     st.write(" ")
-    # 1. 지점 위도/경도 좌표 추출
+
     lat_val = selected_work_info.get("위도") or selected_work_info.get("latitude")
     lng_val = selected_work_info.get("경도") or selected_work_info.get("longitude")
 
@@ -1257,54 +1288,25 @@ else:
             lat_float = float(lat_val)
             lng_float = float(lng_val)
 
-            # 2. 시작일자/종료일자 문자열(YYYYMMDD)을 API 포맷(YYYY-MM-DD)으로 변환
             if len(start_date_str) == 8 and len(end_date_str) == 8:
                 api_start_date = f"{start_date_str[:4]}-{start_date_str[4:6]}-{start_date_str[6:]}"
                 api_end_date = f"{end_date_str[:4]}-{end_date_str[4:6]}-{end_date_str[6:]}"
 
-                # 💡 [추가] 종료일이 오늘(또는 어제)보다 미래일 경우, 조회 가능한 최대 과거 날짜(어제)로 자동 조정
+                # 종료일 미래 날짜 방지 로직
                 max_available_date = date.today() - timedelta(days=1)
+                max_available_date = str(max_available_date).replace("-", "").strip()
+
                 try:
-                    parsed_end_date = datetime.strptime(api_end_date, "%Y-%m-%d").date()
-                    if parsed_end_date > max_available_date:
-                        api_end_date = max_available_date.strftime("%Y-%m-%d")
-                        # 시작일이 조정된 종료일보다 이후가 되는 경우 방지
-                        if api_start_date > api_end_date:
+                    if end_date_str > max_available_date:
+                        api_end_date = f"{max_available_date[:4]}-{max_available_date[4:6]}-{max_available_date[6:]}"
+
+                        if start_date_str > max_available_date:
                             api_start_date = api_end_date
+
                 except Exception:
                     pass
 
-                # 3. Open-Meteo API 호출 함수
-                @st.cache_data
-                def fetch_weather_range(lat, lon, start, end):
-                    url = f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}&start_date={start}&end_date={end}&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&timezone=Asia%2FSeoul"
-                    try:
-                        res = requests.get(url, timeout=10)
-                        if res.status_code == 200:
-                            return res.json()
-                    except Exception:
-                        pass
-                    return None
-
-
-                # WMO 날씨 코드를 아이콘 및 한글 상태로 매핑
-                def get_weather_icon(code):
-                    if code == 0:
-                        return "☀️ 맑음"
-                    elif code in [1, 2, 3]:
-                        return "⛅ 구름/흐림"
-                    elif code in [45, 48]:
-                        return "🌫️ 안개"
-                    elif code in [51, 53, 55, 56, 57, 61, 63, 65, 66, 67]:
-                        return "🌧️ 비"
-                    elif code in [71, 73, 75, 77, 85, 86]:
-                        return "❄️ 눈"
-                    elif code >= 95:
-                        return "⛈️ 천둥번개"
-                    else:
-                        return "🌡️ 기타"
-
-
+                # 날씨 데이터 조회
                 weather_data = fetch_weather_range(lat_float, lng_float, api_start_date, api_end_date)
 
                 if weather_data and "daily" in weather_data:
@@ -1318,15 +1320,14 @@ else:
                     })
                     weather_df["상태"] = weather_df["날씨코드"].apply(get_weather_icon)
 
-                    # 💡 [추가] 날씨 카드 섹션을 최대 7일(1줄)까지만 표기하도록 제한 (추후 전체 보려면 아래 줄을 주석 처리 하세요)
-                    weather_df = weather_df.head(7)
+                    # 💡 [수정] 카드 섹션 전용으로만 7일 자른 별도 데이터프레임 생성 (원본 weather_df는 유지)
+                    weather_df_cards = weather_df.head(7)
 
-                    # 일자별 카드 형태로 그리드 표시 (최대 7일씩 행 분할 등 처리)
-                    num_days = len(weather_df)
+                    # 일자별 카드 형태로 그리드 표시 (weather_df_cards 사용)
+                    num_days = len(weather_df_cards)
                     if num_days > 0:
-                        # 화면 너비에 맞게 최대 7열씩 나누어 출력
                         cols = st.columns(min(num_days, 7))
-                        for idx, row in weather_df.iterrows():
+                        for idx, row in weather_df_cards.iterrows():
                             col_idx = idx % 7
                             if col_idx == 0 and idx > 0:
                                 cols = st.columns(min(num_days - idx, 7))
@@ -1336,30 +1337,26 @@ else:
                                 text_part = row["상태"].split()[1] if len(row["상태"].split()) > 1 else ""
                                 st.markdown(
                                     f"""
-                                                <div style="
-                                                    background-color: #f8f9fa;
-                                                    border: 1px solid #e2e8f0;
-                                                    border-radius: 6px;
-                                                    padding: 10px;
-                                                    text-align: center;
-                                                    margin-bottom: 10px;
-                                                ">
-                                                    <div style="font-size: 13px; font-weight: bold; color: #475569;">{row['날짜']}</div>
-                                                    <div style="font-size: 24px; margin: 4px 0;">{icon_part}</div>
-                                                    <div style="font-size: 12px; color: #64748b; margin-bottom: 6px;">{text_part}</div>
-                                                    <div style="font-size: 13px; color: #ef4444;">최고: {row['최고기온']}°C</div>
-                                                    <div style="font-size: 13px; color: #3b82f6;">최저: {row['최저기온']}°C</div>
-                                                    <div style="font-size: 12px; color: #0f172a; margin-top: 4px;">💧 {row['강수량']}mm</div>
-                                                </div>
-                                                """,
+                                    <div style="
+                                        background-color: #f8f9fa;
+                                        border: 1px solid #e2e8f0;
+                                        border-radius: 6px;
+                                        padding: 10px;
+                                        text-align: center;
+                                        margin-bottom: 10px;
+                                    ">
+                                        <div style="font-size: 13px; font-weight: bold; color: #475569;">{row['날짜']}</div>
+                                        <div style="font-size: 24px; margin: 4px 0;">{icon_part}</div>
+                                        <div style="font-size: 12px; color: #64748b; margin-bottom: 6px;">{text_part}</div>
+                                        <div style="font-size: 13px; color: #ef4444;">최고: {row['최고기온']}°C</div>
+                                        <div style="font-size: 13px; color: #3b82f6;">최저: {row['최저기온']}°C</div>
+                                        <div style="font-size: 12px; color: #0f172a; margin-top: 4px;">💧 {row['강수량']}mm</div>
+                                    </div>
+                                    """,
                                     unsafe_allow_html=True
                                 )
 
-                        # 기온 변화 추이 시각화 차트 추가
-                        st.write(" ")
-                        # ------------------------------------------------------------------------------
-                        # 📈 기온(선) 및 강수량(막대) 멀티 차트 렌더링 (ECharts 듀얼축 활용)
-                        # ------------------------------------------------------------------------------
+                        # 기온 변화 추이 시각화 차트 추가 (💡 원본 weather_df 전체 데이터를 사용)
                         st.write(" ")
                         st.write(" ")
                         st.write(" ")
@@ -1403,7 +1400,7 @@ else:
                                     "type": "value",
                                     "name": "강수량 (mm)",
                                     "position": "right",
-                                    "splitLine": {"show": False},  # 배경 격자선 중복 방지
+                                    "splitLine": {"show": False},
                                     "axisLabel": {"formatter": "{value} mm"}
                                 }
                             ],
@@ -1412,23 +1409,23 @@ else:
                                     "name": "최고기온",
                                     "type": "line",
                                     "data": max_temp,
-                                    "itemStyle": {"color": "#ef4444"},  # 빨간 계열 (최고기온)
+                                    "itemStyle": {"color": "#ef4444"},
                                     "lineStyle": {"width": 2}
                                 },
                                 {
                                     "name": "최저기온",
                                     "type": "line",
                                     "data": min_temp,
-                                    "itemStyle": {"color": "#3b82f6"},  # 파란 계열 (최저기온)
+                                    "itemStyle": {"color": "#3b82f6"},
                                     "lineStyle": {"width": 2}
                                 },
                                 {
                                     "name": "강수량",
                                     "type": "bar",
-                                    "yAxisIndex": 1,  # 우측 Y축 사용
+                                    "yAxisIndex": 1,
                                     "data": precipitation,
                                     "itemStyle": {
-                                        "color": "#93c5fd",  # 연한 하늘색 막대
+                                        "color": "#93c5fd",
                                         "borderRadius": [4, 4, 0, 0]
                                     },
                                     "barWidth": "35%"
