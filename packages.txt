@@ -9,3 +9,5 @@ libgtk-3-0
 libasound2
 libxshmfence1
 fonts-nanum
+fonts-noto-cjk
+fonts-noto-color-emoji
