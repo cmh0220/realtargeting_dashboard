@@ -1874,6 +1874,8 @@ else:
     st.write(" ")
     st.write(" ")
     st.write(" ")
+    st.write(" ")
+    st.write(" ")
     render_section_header("🕒", "시간대 분석", "Timeline Analysis")
     st.write(" ")
     render_chart_grid([chart_hour_weekday_weekend], cols_per_row=1)
@@ -1902,7 +1904,6 @@ else:
     render_comment_box(all_comments, comment_key="com3")
     st.markdown('<div style="text-align: right;" class="copyright">Copyright © 2026. All Rights Reserved.</div>',
                 unsafe_allow_html=True)
-    st.write(" ")
     st.write(" ")
     st.write(" ")
     st.write(" ")

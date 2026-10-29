@@ -878,7 +878,7 @@ else:
         st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
 
         st.download_button(
-            label="💾 PDF 다운(서비스 준비중)",
+            label="💾 PDF 다운로드",
             data=lambda: get_pdf_bytes(user_id, selected_work_no),
             file_name=f"리얼타겟팅 보고서_{user_id}_{selected_work_no}.pdf",
             mime="application/pdf",
