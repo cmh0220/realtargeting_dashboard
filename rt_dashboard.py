@@ -169,7 +169,7 @@ def authenticate_user(user_id: str, password_raw: str) -> dict:
                 "user_id": user_id,
                 "password_hash": hashed_pw,
             },
-            ttl=0,
+            ttl = 0,
         )
 
         if user_df.empty:
