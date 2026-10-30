@@ -66,7 +66,7 @@ admin_device_page = st.Page(
 # 일일점검 페이지 추가
 admin_check_page = st.Page(
     "views/admin_check.py",
-    title="   일일점검",
+    title="   일일점검 체크",
 )
 
 # 로그인 실패 페이지
