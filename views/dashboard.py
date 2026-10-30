@@ -11,11 +11,12 @@ import subprocess
 import pandas as pd
 import requests
 import os
+from streamlit_echarts import JsCode
 
 
 # 1. Playwright 크롬 브라우저 자동 설치 체크 함수
 @st.cache_resource
-def install_playwright_browser():
+def install_report_viewer():
     try:
         subprocess.run(["playwright", "install", "chromium"], check=True)
     except Exception as e:
@@ -23,7 +24,7 @@ def install_playwright_browser():
 
 
 # 앱 실행 시 1회 자동 설치
-install_playwright_browser()
+install_report_viewer()
 
 
 # 2. PDF 생성 핵심 함수
@@ -364,7 +365,9 @@ def render_location_map(selected_work_info: Dict[str, Any]):
 
 def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8):
     """상단 주요 지표 카드를 출력합니다."""
+    st.write(" ")
     col1, col2, col3, col4 = st.columns(4)
+    st.write(" ")
     col5, col6, col7, col8 = st.columns(4)
 
     def get_val_cnt(df, surfix):
@@ -384,7 +387,7 @@ def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8):
     col5.metric("주중 평균 통행량", get_val_cnt(df_h5, "명"))
     col6.metric("주말 평균 통행량", get_val_cnt(df_h6, "명"))
     col7.metric("전체 평균 체류시간", get_val_sec(df_h7, "초"))
-    col8.metric("시간당 평균 체류시간", get_val_sec(df_h8, "초"))
+    col8.metric("체류시간 표준편차", get_val_sec(df_h8, "초"))
 
 
 def render_chart_item(chart_info: Dict[str, Any]):
@@ -397,7 +400,7 @@ def render_chart_item(chart_info: Dict[str, Any]):
     comp_key = f"{chart_type}_{chart_id}"
 
     st.markdown(
-        f"<h4 style='font-size: 20px; font-weight: bold; margin-bottom: 0px;'>{title}</h4>",
+        f"<h4 style='font-size: 20px; font-weight: bold; margin-bottom: 10px;'>{title}</h4>",
         unsafe_allow_html=True,
     )
     st.write(" ")
@@ -447,14 +450,15 @@ def render_chart_item(chart_info: Dict[str, Any]):
         legend_keys = list(pivot_df.columns)
 
         color_map = {
-            "남성": "#60A5FA",
-            "여성": "#F472B6",
-            "m": "#60A5FA",
-            "w": "#F472B6",
-            "왼쪽": "#A865B5",
-            "오른쪽": "#9fcc4b"
+            "남성": "#60A5FA",  # 파란 계열
+            "여성": "#F472B6",  # 핑크 계열
+            "m": "#60A5FA",  # 영문 키값이 'm'인 경우 대비
+            "w": "#F472B6",  # 영문 키값이 'w'인 경우 대비
+            "왼쪽": "#A865B5",  # 연한 보라색 계열 (예: Lavender)
+            "오른쪽": "#9fcc4b"  # 연한 연두색 계열 (예: Light Mint/Green)
         }
 
+        # 각 그룹별 시리즈 생성 (color 속성 추가)
         series_list = []
         for key in legend_keys:
             series_item = {
@@ -528,54 +532,6 @@ def render_chart_item(chart_info: Dict[str, Any]):
         }
         st_echarts(options=options, height="400px", key=comp_key)
 
-    elif chart_type == "echarts_multi_bar_direction":
-        # index_col: x축 기준 (예: 일자 또는 시간), columns_col: 그룹화할 기준 (예: 성별), values_col: 값
-        index_col = chart_info.get("index_col", "collect_date")
-        columns_col = chart_info.get("columns_col", "direction")
-        values_col = chart_info.get("values_col", "cnt")
-        y_name = chart_info.get("y_name", "통행량")
-        is_stacked = chart_info.get("stacked", True)  # 기본값: 누적 바 차트 (False면 그룹 바 차트)
-
-        # 데이터 피벗 (없는 데이터는 0으로 채움)
-        pivot_df = df.pivot(index=index_col, columns=columns_col, values=values_col).fillna(0)
-
-        x_data = [str(idx) for idx in pivot_df.index]
-        legend_keys = list(pivot_df.columns)
-
-        # 🎨 성별/항목별 맞춤 색상 맵 정의 (원하시는 HEX 코드로 자유롭게 변경 가능합니다)
-        color_map = {
-            "남성": "#60A5FA",  # 파란 계열
-            "여성": "#F472B6",  # 핑크 계열
-            "m": "#60A5FA",  # 영문 키값이 'm'인 경우 대비
-            "w": "#F472B6",  # 영문 키값이 'w'인 경우 대비
-            "왼쪽": "#A865B5",  # 연한 보라색 계열 (예: Lavender)
-            "오른쪽": "#9fcc4b"  # 연한 연두색 계열 (예: Light Mint/Green)
-        }
-
-        # 각 그룹별 시리즈 생성 (color 속성 추가)
-        series_list = []
-        for key in legend_keys:
-            series_item = {
-                "name": str(key),
-                "type": "bar",
-                "stack": "total" if is_stacked else None,
-                "data": pivot_df[key].round(1).tolist(),
-            }
-            # 정의된 색상이 있다면 적용
-            if str(key) in color_map:
-                series_item["itemStyle"] = {"color": color_map[str(key)]}
-
-            series_list.append(series_item)
-
-        options = {
-            "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
-            "legend": {"top": "0%", "data": [str(k) for k in legend_keys]},
-            "grid": {"top": "15%", "left": "3%", "right": "4%", "bottom": "3%", "containLabel": True},
-            "xAxis": {"type": "category", "data": x_data},
-            "yAxis": {"type": "value", "name": y_name},
-            "series": series_list,
-        }
-        st_echarts(options=options, height="400px", key=comp_key)
 
     elif chart_type == "echarts_pie":
         name_col = chart_info.get("name_col", "name")
@@ -626,8 +582,18 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
             chart_data.append(item_dict)
 
+        # 💡 [수정] 자바스크립트 함수를 통해 천단위 콤마 및 '명 (%)' 포맷 적용
+        tooltip_formatter = JsCode("""
+            function (params) {
+                return params.name + ': ' + Number(params.value).toLocaleString() + '명 (' + params.percent + '%)';
+            }
+        """)
+
         options = {
-            "tooltip": {"trigger": "item", "formatter": "{b}: {c:,}명 ({d}%)"},
+            "tooltip": {
+                "trigger": "item",
+                "formatter": tooltip_formatter
+            },
             "legend": {"bottom": "5%", "left": "center"},
             "series": [
                 {
@@ -831,7 +797,7 @@ st.logo(
 
 conn = st.connection("mysql", type="sql")
 
-st.subheader("통합 보고서", divider="blue")
+st.subheader("통행량 분석 보고서", divider="blue")
 
 user_id = st.session_state.get("user_id")
 work_list = st.session_state.get("work_list", [])
@@ -907,6 +873,7 @@ else:
     # 지도 및 기본 정보 표시
     render_location_map(selected_work_info)
     st.write(" ")
+    st.write(" ")
 
     # ------------------------------------------------------------------------------
     # 🌟 [추가 기능] 측정 기간 일자별 날씨 정보 연동 영역
@@ -931,7 +898,6 @@ else:
                 max_available_date = str(max_available_date).replace("-", "").strip()
 
                 try:
-
                     if end_date_str > max_available_date:
                         api_end_date = f"{max_available_date[:4]}-{max_available_date[4:6]}-{max_available_date[6:]}"
 
@@ -1211,9 +1177,10 @@ else:
         df_stay = df[df["stay_time"] != 99999]
         h7_stay = float(df_stay["stay_time"].mean()) if not df_stay.empty else 0.0
 
-        # [h8] 시간당 체류시간 평균의 평균 (99999 제외)
+        # [h8] 체류시간 표준편차 (99999 제외, 데이터가 1개 이하일 경우 NaN 방지 처리)
         if not df_stay.empty:
-            h8_stay = float(df_stay.groupby("collect_hour")["stay_time"].mean().mean()) if not df_stay.empty else 0.0
+            std_val = df_stay["stay_time"].std()
+            h8_stay = float(std_val) if (std_val is not None and not pd.isna(std_val)) else 0.0
         else:
             h8_stay = 0.0
 
@@ -1256,7 +1223,7 @@ else:
                 </div>      
                 <div style="font-size: 50px; font-weight: 900; color: {grade_color}; line-height: 1.1;">
                     {grade}
-                </div>          
+                </div>         
             </div>            
             """,
             unsafe_allow_html=True,
@@ -1307,6 +1274,10 @@ else:
     )
     st.write(" ")
 
+    # --------------------------------------------------------------------------
+    # B. 차트 설정 메타데이터 정의
+    # --------------------------------------------------------------------------
+
     # ------------------------------------------------------------------------------
     # 1. 공통 데이터 단 2회 조회 (DB 부하 최소화)
     # ------------------------------------------------------------------------------
@@ -1356,7 +1327,7 @@ else:
       AND rca.stay_time <> 99999
     """
 
-    # DB 쿼리 실행 (총 2회)
+    # 2번 조회
     df_base = conn.query(qr_base_all.format(**variables1), ttl=0)
     df_etc = conn.query(qr_base_etc.format(**variables1), ttl=0)
 
@@ -1393,7 +1364,13 @@ else:
         # 체류시간 평균 (99999 제외)
         df_stay = df_base[df_base["stay_time"] != 99999]
         h7_stay = float(df_stay["stay_time"].mean()) if not df_stay.empty else 0.0
-        h8_stay = float(df_stay.groupby("collect_hour")["stay_time"].mean().mean()) if not df_stay.empty else 0.0
+
+        # 체류시간 표준편차 (99999 제외)
+        if not df_stay.empty:
+            std_val = df_stay["stay_time"].std()
+            h8_stay = float(std_val) if (std_val is not None and not pd.isna(std_val)) else 0.0
+        else:
+            h8_stay = 0.0
 
 
     # ------------------------------------------------------------------------------
@@ -1434,6 +1411,13 @@ else:
     df_date_stay = df_stay_valid.groupby("formatted_date")["stay_time"].mean().reset_index()
     df_date_stay.columns = ["collect_date", "cnt"]
 
+    # 💡 [추가] 체류시간 분포 파이차트용 데이터 가공 (구간별 통행량 합산)
+    bins = [-1, 5, 10, 60, 600, float('inf')]
+    labels = ['5초 미만', '5초~10초', '10초~1분', '1분~10분', '10분 이상']
+    df_stay_valid['stay_bin'] = pd.cut(df_stay_valid['stay_time'], bins=bins, labels=labels)
+    df_stay_pie = df_stay_valid.groupby('stay_bin', observed=False)['collect_cnt'].sum().reset_index()
+    df_stay_pie.columns = ['stay_range', 'cnt']
+
     # 4. 요일별/시간대별 통행량 및 체류시간
     day_map = {'Sun': '일', 'Mon': '월', 'Tue': '화', 'Wed': '수', 'Thu': '목', 'Fri': '금', 'Sat': '토'}
     day_order = {'일': 1, '월': 2, '화': 3, '수': 4, '목': 5, '금': 6, '토': 7}
@@ -1459,8 +1443,8 @@ else:
     df_gender_pie.columns = ["gender", "cnt"]
 
     df_gender_hour = df_base.groupby(["collect_hour", "gender"], as_index=False)["collect_cnt"].mean()
-    df_gender_hour.columns = ["collect_hour", "gender", "cnt"]  # 먼저 컬럼명을 'cnt'로 변경
-    df_gender_hour["cnt"] = df_gender_hour["cnt"].round()  # 그 후 반올림 수행
+    df_gender_hour.columns = ["collect_hour", "gender", "cnt"]
+    df_gender_hour["cnt"] = df_gender_hour["cnt"].round()
     df_gender_hour["gender"] = df_gender_hour["gender"].map({"male": "남성", "female": "여성"})
 
     df_gender_hour_stay = df_stay_valid.groupby(["collect_hour", "gender"], as_index=False)["stay_time"].mean()
@@ -1470,10 +1454,10 @@ else:
 
     # 6. 연령대 관련 차트 데이터 수정
     df_age_day = df_base_gender.groupby(["formatted_date", "age"], as_index=False)["collect_cnt"].sum()
-    df_age_day.columns = ["collect_date", "age", "cnt"]  # 컬럼명 확실하게 고정
+    df_age_day.columns = ["collect_date", "age", "cnt"]
 
     df_age_pie = df_base.groupby("age", as_index=False)["collect_cnt"].sum()
-    df_age_pie.columns = ["age", "cnt"]  # [age, cnt] 보장
+    df_age_pie.columns = ["age", "cnt"]
 
     df_age_hour = df_base.groupby(["collect_hour", "age"], as_index=False)["collect_cnt"].sum()
     df_age_hour.columns = ["hour", "age", "cnt"]
@@ -1487,15 +1471,14 @@ else:
     df_dir_day.columns = ["collect_date", "direction", "cnt"]
 
     df_dir_pie = df_base.groupby("direction", as_index=False)["collect_cnt"].sum()
-    df_dir_pie.columns = ["direction", "cnt"]  # [direction, cnt] 보장
+    df_dir_pie.columns = ["direction", "cnt"]
 
     df_dir_hour = df_base.groupby(["collect_hour", "direction"], as_index=False)["collect_cnt"].sum()
     df_dir_hour.columns = ["collect_hour", "direction", "cnt"]
 
     # 7. 기타 객체(자전거, 유모차, 애완견) 차트 데이터 수정
     df_etc_pie = df_etc.groupby("class", as_index=False)["collect_cnt"].sum()
-    df_etc_pie.columns = ["class", "cnt"]  # [class, cnt] 보장
-    # 대소문자 매핑 (필요시)
+    df_etc_pie.columns = ["class", "cnt"]
     df_etc_pie["class"] = df_etc_pie["class"].map({"bycicle": "bycicle", "stroller": "stroller", "dog": "dog"})
 
     df_etc_hour = df_etc.groupby(["collect_hour", "class"], as_index=False)["collect_cnt"].sum()
@@ -1512,6 +1495,11 @@ else:
                                   "columns_col": "gubun", "values_col": "cnt", "y_name": "통행량"}
     chart_date_stay = {"chart_id": "date_stay", "title": "일자별 평균 체류시간", "type": "bar", "df": df_date_stay,
                        "x": "collect_date", "y": "cnt", "x_label": "일자", "y_label": "평균 체류시간"}
+
+    # 💡 [추가] 체류시간 분포 파이차트 딕셔너리 정의
+    chart_stay_pie = {"chart_id": "stay_pie", "title": "체류시간 분포", "type": "echarts_pie", "df": df_stay_pie,
+                      "name_col": "stay_range", "value_col": "cnt", "semi_pie": None}
+
     chart_day_hour = {"chart_id": "day_hour_traffic", "title": "요일별/시간대별 평균 통행량", "type": "echarts_multi_line",
                       "df": df_day_hour, "index_col": "collect_hour", "columns_col": "collect_day", "values_col": "cnt",
                       "y_name": "통행량"}
@@ -1592,7 +1580,7 @@ else:
     st.write(" ")
     st.write(" ")
     st.write(" ")
-    render_chart_grid([chart_day_hour_stay_time], cols_per_row=1)
+    render_chart_grid([chart_stay_pie, chart_day_hour_stay_time], cols_per_row=2)
     st.write(" ")
     st.write(" ")
     render_comment_box(all_comments, comment_key="com3")

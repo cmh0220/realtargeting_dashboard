@@ -9,6 +9,7 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import pandas as pd
 import requests
+from streamlit_echarts import JsCode
 
 
 # 3. Open-Meteo API 호출 함수
@@ -738,7 +739,7 @@ def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8):
     col5.metric("주중 평균 통행량", get_val_cnt(df_h5, "명"))
     col6.metric("주말 평균 통행량", get_val_cnt(df_h6, "명"))
     col7.metric("전체 평균 체류시간", get_val_sec(df_h7, "초"))
-    col8.metric("시간당 평균 체류시간", get_val_sec(df_h8, "초"))
+    col8.metric("체류시간 표준편차", get_val_sec(df_h8, "초"))
 
 
 def render_chart_item(chart_info: Dict[str, Any]):
@@ -984,8 +985,18 @@ def render_chart_item(chart_info: Dict[str, Any]):
 
             chart_data.append(item_dict)
 
+        # 💡 [수정] 자바스크립트 함수를 통해 천단위 콤마 및 '명 (%)' 포맷 적용
+        tooltip_formatter = JsCode("""
+            function (params) {
+                return params.name + ': ' + Number(params.value).toLocaleString() + '명 (' + params.percent + '%)';
+            }
+        """)
+
         options = {
-            "tooltip": {"trigger": "item", "formatter": "{b}: {c:,}명 ({d}%)"},
+            "tooltip": {
+                "trigger": "item",
+                "formatter": tooltip_formatter
+            },
             "legend": {"bottom": "5%", "left": "center"},
             "series": [
                 {
@@ -1482,33 +1493,33 @@ else:
     # A. Metric 상단 지표 조회 및 렌더링
     # --------------------------------------------------------------------------
     qr_h1 = """SELECT sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 """
-    qr_h2 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 GROUP BY rca.collect_date) t1"""
+    qr_h2 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date) t1"""
     qr_h3 = """SELECT round(avg(t1.cnt)) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} AND rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' and (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
     qr_h4 = """SELECT round(avg(t1.cnt)/60) as avg FROM (SELECT rca.collect_date, rca.collect_hour as collect_hour, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_date, rca.collect_hour) t1"""
-    qr_h5 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekday_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_summary rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday' GROUP BY rca.collect_date) t1"""
-    qr_h6 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekend_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_summary rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND rca.class IN ('m01', 'm23', 'm45', 'm67', 'w01', 'w23', 'w45', 'w67', 'unknown') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' GROUP BY rca.collect_date) t1"""
+    qr_h5 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekday_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_summary rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday' GROUP BY rca.collect_date) t1"""
+    qr_h6 = """SELECT IFNULL(ROUND(AVG(t1.cnt)), 0) AS weekend_avg FROM (SELECT rca.collect_date AS collect_date, IFNULL(SUM(rca.collect_cnt), 0) AS cnt FROM rt_collect_summary rca JOIN rt_calendar c ON rca.collect_date = c.dt WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend' GROUP BY rca.collect_date) t1"""
     qr_h7 = """SELECT avg(rca.stay_time) as stay_time FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 """
     qr_h8 = """SELECT AVG(t1.hourly_avg_stay) as stay_time FROM (SELECT rca.collect_hour, AVG(rca.stay_time) AS hourly_avg_stay FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 GROUP BY rca.collect_hour) t1;"""
 
     # 1. 단 1회 통합 조회 쿼리 실행
     qr_all = """
-        SELECT 
-            rca.collect_date, 
-            rca.collect_hour, 
-            rca.collect_cnt, 
-            rca.stay_time,
-            c.anal_gubun
-        FROM rt_collect_summary rca 
-        LEFT JOIN rt_calendar c ON rca.collect_date = c.dt
-        WHERE rca.user_id = '{id}' 
-          AND rca.work_no = {work_no} 
-          AND rca.collect_date >= '{start_date_str}' 
-          AND rca.collect_date <= '{end_date_str}' 
-          AND rca.collect_hour >= '{start_time_str}' 
-          AND rca.collect_hour < '{end_time_str}' 
-          AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
-          AND rca.del_yn = 0
-        """
+    SELECT 
+        rca.collect_date, 
+        rca.collect_hour, 
+        rca.collect_cnt, 
+        rca.stay_time,
+        c.anal_gubun
+    FROM rt_collect_summary rca 
+    LEFT JOIN rt_calendar c ON rca.collect_date = c.dt
+    WHERE rca.user_id = '{id}' 
+      AND rca.work_no = {work_no} 
+      AND rca.collect_date >= '{start_date_str}' 
+      AND rca.collect_date <= '{end_date_str}' 
+      AND rca.collect_hour >= '{start_time_str}' 
+      AND rca.collect_hour < '{end_time_str}' 
+      AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
+      AND rca.del_yn = 0
+    """
 
     df = conn.query(qr_all.format(**variables1), ttl=0)
 
@@ -1546,9 +1557,10 @@ else:
         df_stay = df[df["stay_time"] != 99999]
         h7_stay = float(df_stay["stay_time"].mean()) if not df_stay.empty else 0.0
 
-        # [h8] 시간당 체류시간 평균의 평균 (99999 제외)
+        # [h8] 체류시간 표준편차 (99999 제외, 데이터가 1개 이하일 경우 NaN 방지 처리)
         if not df_stay.empty:
-            h8_stay = float(df_stay.groupby("collect_hour")["stay_time"].mean().mean()) if not df_stay.empty else 0.0
+            std_val = df_stay["stay_time"].std()
+            h8_stay = float(std_val) if (std_val is not None and not pd.isna(std_val)) else 0.0
         else:
             h8_stay = 0.0
 
@@ -1699,6 +1711,7 @@ else:
     df_base = conn.query(qr_base_all.format(**variables1), ttl=0)
     df_etc = conn.query(qr_base_etc.format(**variables1), ttl=0)
 
+
     # ------------------------------------------------------------------------------
     # 2. 차트용 데이터프레임 가공 (Pandas)
     # ------------------------------------------------------------------------------
@@ -1739,6 +1752,13 @@ else:
     # 3. 일자별 평균 체류시간
     df_date_stay = df_stay_valid.groupby("formatted_date", as_index=False)["stay_time"].mean()
     df_date_stay.columns = ["collect_date", "cnt"]
+
+    # 💡 [추가] 체류시간 분포 파이차트용 데이터 가공 (구간별 통행량 합산)
+    bins = [-1, 5, 10, 60, 600, float('inf')]
+    labels = ['5초 미만', '5초~10초', '10초~1분', '1분~10분', '10분 이상']
+    df_stay_valid['stay_bin'] = pd.cut(df_stay_valid['stay_time'], bins=bins, labels=labels)
+    df_stay_pie = df_stay_valid.groupby('stay_bin', observed=False)['collect_cnt'].sum().reset_index()
+    df_stay_pie.columns = ['stay_range', 'cnt']
 
     # 4. 요일별/시간대별 통행량 및 체류시간
     day_map = {'Sun': '일', 'Mon': '월', 'Tue': '화', 'Wed': '수', 'Thu': '목', 'Fri': '금', 'Sat': '토'}
@@ -1814,6 +1834,11 @@ else:
                                   "columns_col": "gubun", "values_col": "cnt", "y_name": "통행량", "chart_height": 400}
     chart_date_stay = {"chart_id": "date_stay", "title": "일자별 평균 체류시간", "type": "bar", "df": df_date_stay,
                        "x": "collect_date", "y": "cnt", "x_label": "일자", "y_label": "평균 체류시간", "chart_height": 450}
+
+    # 💡 [추가] 체류시간 분포 파이차트 딕셔너리 정의
+    chart_stay_pie = {"chart_id": "stay_pie", "title": "체류시간 분포", "type": "echarts_pie", "df": df_stay_pie,
+                      "name_col": "stay_range", "value_col": "cnt", "semi_pie": None, "chart_height": 450}
+
     chart_day_hour = {"chart_id": "day_hour_traffic", "title": "요일별/시간대별 평균 통행량", "type": "echarts_multi_line",
                       "df": df_day_hour, "index_col": "collect_hour", "columns_col": "collect_day", "values_col": "cnt",
                       "y_name": "통행량", "chart_height": 400}
@@ -1898,7 +1923,7 @@ else:
     render_chart_grid([chart_date_stay], cols_per_row=1)
     st.write(" ")
     st.write(" ")
-    render_chart_grid([chart_day_hour_stay_time], cols_per_row=1)
+    render_chart_grid([chart_stay_pie, chart_day_hour_stay_time], cols_per_row=2)
     st.write(" ")
     st.write(" ")
     render_comment_box(all_comments, comment_key="com3")

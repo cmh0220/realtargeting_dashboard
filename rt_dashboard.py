@@ -90,7 +90,7 @@ today_page = st.Page(
 
 dashboard_page = st.Page(
     "views/dashboard.py",
-    title="   분석 보고서",
+    title="   통행량 분석 보고서",
 )
 
 # today_car_page = st.Page(
