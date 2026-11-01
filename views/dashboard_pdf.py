@@ -1878,6 +1878,61 @@ else:
     )
 
     # 3. 일자별 평균 체류시간
+    # ------------------------------------------------------------------------------
+    # 3. 일자별 평균 체류시간
+    #    원장데이터(rt_collect_all)의 개인별 체류시간을 직접 조회하여 계산
+    #    ※ rt_collect_summary의 평균 체류시간을 재평균하지 않음
+    # ------------------------------------------------------------------------------
+
+    qr_date_stay = """
+            SELECT
+                rca.collect_date,
+                rca.stay_time
+            FROM rt_collect_all rca
+            WHERE rca.user_id = '{id}'
+              AND rca.work_no = {work_no}
+              AND rca.collect_date >= '{start_date_str}'
+              AND rca.collect_date <= '{end_date_str}'
+              AND rca.collect_hour >= '{start_time_str}'
+              AND rca.collect_hour < '{end_time_str}'
+              AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
+              AND rca.del_yn = 0
+              AND rca.stay_time IS NOT NULL
+              AND rca.stay_time <> 99999
+        """
+
+    # 원장데이터 조회
+    df_date_stay_raw = conn.query(
+        qr_date_stay.format(**variables1),
+        ttl=0
+    )
+
+    # 일자별 개인 체류시간 평균 계산
+    if not df_date_stay_raw.empty:
+
+        df_date_stay = (
+            df_date_stay_raw
+            .groupby("collect_date")["stay_time"]
+            .mean()
+            .round()
+            .reset_index()
+        )
+
+        # 기존 차트에서 사용하는 컬럼명 유지
+        df_date_stay.columns = ["collect_date", "cnt"]
+
+        # 날짜 형식 변환 (YYYYMMDD → MM/DD)
+        df_date_stay["collect_date"] = (
+            df_date_stay["collect_date"]
+            .apply(format_date_str)
+        )
+
+    else:
+
+        df_date_stay = pd.DataFrame(
+            columns=["collect_date", "cnt"]
+        )
+
     df_date_stay = df_stay_valid.groupby(
         "formatted_date", as_index=False
     )["stay_time"].mean()
