@@ -715,14 +715,14 @@ def render_location_map(selected_work_info: Dict[str, Any]):
         )
 
 
-def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8, df_h9, df_h10):
+def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8, df_h10):
     """상단 주요 지표 카드를 출력합니다."""
     st.write(" ")
     col1, col2, col3, col4 = st.columns(4)
     st.write(" ")
     col5, col6, col7, col8 = st.columns(4)
     st.write(" ")
-    col9, col10 = st.columns(2)
+    col10 = st.columns(1)[0]
 
     def get_val_cnt(df, surfix):
         if df is not None and not df.empty and df.iloc[0, 0] is not None:
@@ -741,7 +741,6 @@ def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8, 
     col5.metric("주중 평균 통행량", get_val_cnt(df_h5, "명"))
     col6.metric("주말 평균 통행량", get_val_cnt(df_h6, "명"))
     col7.metric("전체 평균 체류시간", get_val_sec(df_h7, "초"))
-    col9.metric("가중 평균 체류시간", get_val_sec(df_h9, "초"))
     col8.metric("체류시간 표준편차", get_val_sec(df_h8, "초"))
     col10.metric("체류시간 중앙값", get_val_sec(df_h10, "초"))
 
@@ -1505,83 +1504,162 @@ else:
     qr_h7 = """SELECT avg(rca.stay_time) as stay_time FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 """
     qr_h8 = """SELECT AVG(t1.hourly_avg_stay) as stay_time FROM (SELECT rca.collect_hour, AVG(rca.stay_time) AS hourly_avg_stay FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 GROUP BY rca.collect_hour) t1;"""
 
-    # 1. 단 1회 통합 조회 쿼리 실행
+    # 1. 통행량 분석용 통합 조회
     qr_all = """
-    SELECT 
-        rca.collect_date, 
-        rca.collect_hour, 
-        rca.collect_cnt, 
-        rca.stay_time,
-        c.anal_gubun
-    FROM rt_collect_summary rca 
-    LEFT JOIN rt_calendar c ON rca.collect_date = c.dt
-    WHERE rca.user_id = '{id}' 
-      AND rca.work_no = {work_no} 
-      AND rca.collect_date >= '{start_date_str}' 
-      AND rca.collect_date <= '{end_date_str}' 
-      AND rca.collect_hour >= '{start_time_str}' 
-      AND rca.collect_hour < '{end_time_str}' 
-      AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') 
-      AND rca.del_yn = 0
-    """
+        SELECT
+            rca.collect_date,
+            rca.collect_hour,
+            rca.collect_cnt,
+            c.anal_gubun
+        FROM rt_collect_summary rca
+        LEFT JOIN rt_calendar c
+            ON rca.collect_date = c.dt
+        WHERE rca.user_id = '{id}'
+          AND rca.work_no = {work_no}
+          AND rca.collect_date >= '{start_date_str}'
+          AND rca.collect_date <= '{end_date_str}'
+          AND rca.collect_hour >= '{start_time_str}'
+          AND rca.collect_hour < '{end_time_str}'
+          AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
+          AND rca.del_yn = 0
+        """
 
     df = conn.query(qr_all.format(**variables1), ttl=0)
 
-    # 2. 데이터가 없을 경우 기본값 설정 및 Pandas 연산
+    # 2. 기본값 설정 및 통행량 Pandas 연산
     if df.empty:
-        h1_cnt, h2_avg, h3_avg, h4_avg, h5_weekday, h6_weekend, h7_stay, h8_stay, h9_stay, h10_stay = 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0
+        h1_cnt = 0
+        h2_avg = 0
+        h3_avg = 0
+        h4_avg = 0
+        h5_weekday = 0
+        h6_weekend = 0
         avg_daily_cnt = 0.0
     else:
         # [h1] 전체 총 통행량
         h1_cnt = int(df["collect_cnt"].sum())
 
-        # [h2] 일평균 통행량 (등급 판정용 겸용)
+        # [h2] 일평균 통행량
         df_daily = df.groupby("collect_date")["collect_cnt"].sum().reset_index()
-        avg_daily_cnt = float(df_daily["collect_cnt"].mean()) if not df_daily.empty else 0.0
+        avg_daily_cnt = (
+            float(df_daily["collect_cnt"].mean())
+            if not df_daily.empty else 0.0
+        )
         h2_avg = round(avg_daily_cnt)
 
         # [h3] 시간대별 일평균 통행량
-        df_hourly = df.groupby(["collect_date", "collect_hour"])["collect_cnt"].sum().reset_index()
-        h3_avg = round(df_hourly["collect_cnt"].mean()) if not df_hourly.empty else 0
+        df_hourly = (
+            df.groupby(["collect_date", "collect_hour"])["collect_cnt"]
+            .sum()
+            .reset_index()
+        )
+        h3_avg = (
+            round(df_hourly["collect_cnt"].mean())
+            if not df_hourly.empty else 0
+        )
 
         # [h4] 분당 통행량 평균
         h4_avg = round(h3_avg / 60) if h3_avg > 0 else 0
 
         # [h5] 평일 평균
         df_weekday = df[df["anal_gubun"] == "Weekday"]
-        h5_weekday = round(
-            df_weekday.groupby("collect_date")["collect_cnt"].sum().mean()) if not df_weekday.empty else 0
+        h5_weekday = (
+            round(df_weekday.groupby("collect_date")["collect_cnt"].sum().mean())
+            if not df_weekday.empty else 0
+        )
 
         # [h6] 주말 평균
         df_weekend = df[df["anal_gubun"] == "Weekend"]
-        h6_weekend = round(
-            df_weekend.groupby("collect_date")["collect_cnt"].sum().mean()) if not df_weekend.empty else 0
+        h6_weekend = (
+            round(df_weekend.groupby("collect_date")["collect_cnt"].sum().mean())
+            if not df_weekend.empty else 0
+        )
 
-        # [h7] 체류시간 평균 (99999 제외)
-        df_stay = df[df["stay_time"] != 99999]
-        h7_stay = float(df_stay["stay_time"].mean()) if not df_stay.empty else 0.0
+    # 3. 체류시간 평균 및 표준편차: summary 통계 컬럼으로 정확하게 계산
+    qr_stay_summary = """
+        SELECT
+            SUM(stay_time_count) AS stay_time_count,
+            SUM(stay_time_sum) AS stay_time_sum,
+            SUM(stay_time_sum_sq) AS stay_time_sum_sq
+        FROM rt_collect_summary
+        WHERE user_id = '{id}'
+          AND work_no = {work_no}
+          AND collect_date >= '{start_date_str}'
+          AND collect_date <= '{end_date_str}'
+          AND collect_hour >= '{start_time_str}'
+          AND collect_hour < '{end_time_str}'
+          AND (class LIKE 'm%' OR class LIKE 'w%')
+          AND del_yn = 0
+        """
 
-        # [h8] 체류시간 표준편차 (99999 제외, 데이터가 1개 이하일 경우 NaN 방지 처리)
-        if not df_stay.empty:
-            std_val = df_stay["stay_time"].std()
-            h8_stay = float(std_val) if (std_val is not None and not pd.isna(std_val)) else 0.0
-        else:
+    df_stay_summary = conn.query(
+        qr_stay_summary.format(**variables1),
+        ttl=0
+    )
+
+    if df_stay_summary.empty:
+        h7_stay = 0.0
+        h8_stay = 0.0
+    else:
+        stay_count = df_stay_summary.loc[0, "stay_time_count"]
+        stay_sum = df_stay_summary.loc[0, "stay_time_sum"]
+        stay_sum_sq = df_stay_summary.loc[0, "stay_time_sum_sq"]
+
+        if pd.isna(stay_count) or stay_count == 0:
+            h7_stay = 0.0
             h8_stay = 0.0
-
-        # [h9] 가중평균 체류시간 (통행량 collect_cnt 가중 반영)
-        if not df_stay.empty and df_stay["collect_cnt"].sum() > 0:
-            total_weighted_stay = (df_stay["stay_time"] * df_stay["collect_cnt"]).sum()
-            total_cnt = df_stay["collect_cnt"].sum()
-            h9_stay = float(total_weighted_stay / total_cnt)
         else:
-            h9_stay = 0.0
+            # [h7] 전체 개인 기준 평균 체류시간
+            h7_stay = float(stay_sum / stay_count)
 
-        # [h10] 체류시간 중앙값 (통행량 빈도 반영)
-        if not df_stay.empty and df_stay["collect_cnt"].sum() > 0:
-            expanded_stay = df_stay.loc[df_stay.index.repeat(df_stay["collect_cnt"]), "stay_time"]
-            h10_stay = float(expanded_stay.median())
-        else:
-            h10_stay = 0.0
+            # [h8] 전체 개인 기준 모집단 표준편차
+            variance = (stay_sum_sq / stay_count) - (h7_stay ** 2)
+
+            # 부동소수점 계산 오차로 아주 작은 음수가 나오는 경우 방지
+            variance = max(float(variance), 0.0)
+
+            h8_stay = float(variance ** 0.5)
+
+    # 4. 체류시간 중앙값: 원천데이터에서 개인별 체류시간 조회
+    qr_stay_median = """
+        WITH ranked AS (
+            SELECT
+                rca.stay_time,
+                ROW_NUMBER() OVER (ORDER BY rca.stay_time) AS rn,
+                COUNT(*) OVER () AS cnt
+            FROM rt_collect_all rca
+            WHERE rca.user_id = '{id}'
+              AND rca.work_no = {work_no}
+              AND rca.collect_date >= '{start_date_str}'
+              AND rca.collect_date <= '{end_date_str}'
+              AND rca.collect_hour >= '{start_time_str}'
+              AND rca.collect_hour < '{end_time_str}'
+              AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
+              AND rca.del_yn = 0
+              AND rca.stay_time IS NOT NULL
+              AND rca.stay_time <> 99999
+        )
+        SELECT AVG(stay_time) AS median_stay_time
+        FROM ranked
+        WHERE rn IN (
+            FLOOR((cnt + 1) / 2),
+            FLOOR((cnt + 2) / 2)
+        )
+        """
+
+    df_stay_median = conn.query(
+        qr_stay_median.format(**variables1),
+        ttl=0
+    )
+
+    if (
+            df_stay_median.empty
+            or pd.isna(df_stay_median.loc[0, "median_stay_time"])
+    ):
+        h10_stay = 0.0
+    else:
+        # [h10] 개인별 체류시간 중앙값
+        h10_stay = float(df_stay_median.loc[0, "median_stay_time"])
 
     # 2. 등급 판정 및 색상 설정 로직
     if avg_daily_cnt >= 10000:
@@ -1669,7 +1747,6 @@ else:
         pd.DataFrame({"val": [h6_weekend]}),
         pd.DataFrame({"val": [h7_stay]}),
         pd.DataFrame({"val": [h8_stay]}),
-        pd.DataFrame({"val": [h9_stay]}),
         pd.DataFrame({"val": [h10_stay]})
     )
     st.write(" ")
@@ -1727,9 +1804,28 @@ else:
       AND rca.stay_time <> 99999
     """
 
-    # 2번 조회
+    # [데이터셋 3] 체류시간 분포 파이차트용 개인별 원본 데이터
+    # 요약 테이블이 아닌 rt_collect_all에서 실제 개인별 체류시간 조회
+    qr_stay_distribution = """
+    SELECT 
+        rca.stay_time
+    FROM rt_collect_all rca
+    WHERE rca.user_id = '{id}'
+      AND rca.work_no = {work_no}
+      AND rca.collect_date >= '{start_date_str}'
+      AND rca.collect_date <= '{end_date_str}'
+      AND rca.collect_hour >= '{start_time_str}'
+      AND rca.collect_hour < '{end_time_str}'
+      AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
+      AND rca.del_yn = 0
+      AND rca.stay_time IS NOT NULL
+      AND rca.stay_time <> 99999
+    """
+
+    # 3번 조회
     df_base = conn.query(qr_base_all.format(**variables1), ttl=0)
     df_etc = conn.query(qr_base_etc.format(**variables1), ttl=0)
+    df_stay_distribution = conn.query(qr_stay_distribution.format(**variables1), ttl=0)
 
 
     # ------------------------------------------------------------------------------
@@ -1754,110 +1850,286 @@ else:
     def get_hourly_trend(subset_df):
         if subset_df.empty:
             return pd.DataFrame(columns=["collect_hour", "cnt"])
-        t1 = subset_df.groupby(["collect_date", "collect_hour"], as_index=False)["collect_cnt"].sum()
+
+        t1 = subset_df.groupby(
+            ["collect_date", "collect_hour"], as_index=False
+        )["collect_cnt"].sum()
+
         t1.columns = ["collect_date", "collect_hour", "cnt"]
+
         res = t1.groupby("collect_hour", as_index=False)["cnt"].mean()
         res["cnt"] = res["cnt"].round()
+
         return res
 
 
     df_w_trend = get_hourly_trend(df_base[df_base["anal_gubun"] == "Weekday"])
     df_w_trend["gubun"] = "주중"
+
     df_we_trend = get_hourly_trend(df_base[df_base["anal_gubun"] == "Weekend"])
     df_we_trend["gubun"] = "주말"
+
     df_tot_trend = get_hourly_trend(df_base)
     df_tot_trend["gubun"] = "전체"
-    df_hour_ww = pd.concat([df_w_trend, df_we_trend, df_tot_trend], ignore_index=True)
+
+    df_hour_ww = pd.concat(
+        [df_w_trend, df_we_trend, df_tot_trend],
+        ignore_index=True
+    )
 
     # 3. 일자별 평균 체류시간
-    df_date_stay = df_stay_valid.groupby("formatted_date", as_index=False)["stay_time"].mean()
+    df_date_stay = df_stay_valid.groupby(
+        "formatted_date", as_index=False
+    )["stay_time"].mean()
+
     df_date_stay.columns = ["collect_date", "cnt"]
 
-    # 💡 [추가] 체류시간 분포 파이차트용 데이터 가공 (구간별 통행량 합산)
-    bins = [-1, 5, 10, 60, 600, float('inf')]
-    labels = ['5초 미만', '5초~10초', '10초~1분', '1분~10분', '10분 이상']
-    df_stay_valid['stay_bin'] = pd.cut(df_stay_valid['stay_time'], bins=bins, labels=labels)
-    df_stay_pie = df_stay_valid.groupby('stay_bin', observed=False)['collect_cnt'].sum().reset_index()
-    df_stay_pie.columns = ['stay_range', 'cnt']
+    # 4. 체류시간 분포 파이차트용 데이터 가공
+    # 개인별 원본 데이터의 실제 행 개수를 기준으로 집계
+    bins = [-1, 5, 10, 60, 600, float("inf")]
+    labels = [
+        "5초 미만",
+        "5초~10초",
+        "10초~1분",
+        "1분~10분",
+        "10분 이상"
+    ]
 
-    # 4. 요일별/시간대별 통행량 및 체류시간
-    day_map = {'Sun': '일', 'Mon': '월', 'Tue': '화', 'Wed': '수', 'Thu': '목', 'Fri': '금', 'Sat': '토'}
-    df_base['collect_day_kr'] = df_base['collect_day'].map(day_map)
-    df_stay_valid['collect_day_kr'] = df_stay_valid['collect_day'].map(day_map)
+    if not df_stay_distribution.empty:
 
-    df_day_hour = df_base.groupby(["collect_hour", "collect_day_kr"], as_index=False)["collect_cnt"].mean()
+        df_stay_distribution["stay_bin"] = pd.cut(
+            df_stay_distribution["stay_time"],
+            bins=bins,
+            labels=labels,
+            right=False
+        )
+
+        df_stay_pie = (
+            df_stay_distribution
+            .groupby("stay_bin", observed=False)
+            .size()
+            .reset_index(name="cnt")
+        )
+
+        df_stay_pie.columns = ["stay_range", "cnt"]
+
+    else:
+        # 데이터가 없더라도 파이차트 구간은 유지
+        df_stay_pie = pd.DataFrame({
+            "stay_range": labels,
+            "cnt": [0, 0, 0, 0, 0]
+        })
+
+    # 5. 요일별/시간대별 통행량 및 체류시간
+    day_map = {
+        "Sun": "일",
+        "Mon": "월",
+        "Tue": "화",
+        "Wed": "수",
+        "Thu": "목",
+        "Fri": "금",
+        "Sat": "토"
+    }
+
+    df_base["collect_day_kr"] = df_base["collect_day"].map(day_map)
+    df_stay_valid["collect_day_kr"] = df_stay_valid["collect_day"].map(day_map)
+
+    df_day_hour = df_base.groupby(
+        ["collect_hour", "collect_day_kr"],
+        as_index=False
+    )["collect_cnt"].mean()
+
     df_day_hour.columns = ["collect_hour", "collect_day", "cnt"]
 
-    df_dh_stay = df_stay_valid.groupby(["collect_hour", "collect_day_kr"], as_index=False)["stay_time"].mean()
+    df_dh_stay = df_stay_valid.groupby(
+        ["collect_hour", "collect_day_kr"],
+        as_index=False
+    )["stay_time"].mean()
+
     df_dh_stay["stay_time"] = df_dh_stay["stay_time"].round(1)
     df_dh_stay.columns = ["collect_hour", "collect_day", "stay_time"]
 
-    # 5. 성별 관련 차트 데이터
+    # 6. 성별 관련 차트 데이터
     df_base_gender = df_stay_valid.copy()
-    df_base_gender["gender_kr"] = df_base_gender["gender"].map({"male": "남성", "female": "여성"})
 
-    df_gender_day = df_base_gender.groupby(["formatted_date", "gender_kr"], as_index=False)["collect_cnt"].sum()
+    df_base_gender["gender_kr"] = df_base_gender["gender"].map({
+        "male": "남성",
+        "female": "여성"
+    })
+
+    df_gender_day = df_base_gender.groupby(
+        ["formatted_date", "gender_kr"],
+        as_index=False
+    )["collect_cnt"].sum()
+
     df_gender_day.columns = ["collect_date", "gender", "cnt"]
 
-    df_gender_pie = df_base.groupby("gender", as_index=False)["collect_cnt"].sum()
-    df_gender_pie["gender"] = df_gender_pie["gender"].map({"male": "남성", "female": "여성"})
+    df_gender_pie = df_base.groupby(
+        "gender",
+        as_index=False
+    )["collect_cnt"].sum()
+
+    df_gender_pie["gender"] = df_gender_pie["gender"].map({
+        "male": "남성",
+        "female": "여성"
+    })
+
     df_gender_pie.columns = ["gender", "cnt"]
 
-    df_gender_hour = df_base.groupby(["collect_hour", "gender"], as_index=False)["collect_cnt"].mean()
+    df_gender_hour = df_base.groupby(
+        ["collect_hour", "gender"],
+        as_index=False
+    )["collect_cnt"].mean()
+
     df_gender_hour.columns = ["collect_hour", "gender", "cnt"]
     df_gender_hour["cnt"] = df_gender_hour["cnt"].round()
-    df_gender_hour["gender"] = df_gender_hour["gender"].map({"male": "남성", "female": "여성"})
 
-    df_gender_hour_stay = df_stay_valid.groupby(["collect_hour", "gender"], as_index=False)["stay_time"].mean()
+    df_gender_hour["gender"] = df_gender_hour["gender"].map({
+        "male": "남성",
+        "female": "여성"
+    })
+
+    df_gender_hour_stay = df_stay_valid.groupby(
+        ["collect_hour", "gender"],
+        as_index=False
+    )["stay_time"].mean()
+
     df_gender_hour_stay["stay_time"] = df_gender_hour_stay["stay_time"].round(1)
-    df_gender_hour_stay["gender"] = df_gender_hour_stay["gender"].map({"male": "남성", "female": "여성"})
-    df_gender_hour_stay.columns = ["collect_hour", "gender", "stay_time"]
 
-    # 6. 연령대 관련 차트 데이터
-    df_age_day = df_base_gender.groupby(["formatted_date", "age"], as_index=False)["collect_cnt"].sum()
+    df_gender_hour_stay["gender"] = df_gender_hour_stay["gender"].map({
+        "male": "남성",
+        "female": "여성"
+    })
+
+    df_gender_hour_stay.columns = [
+        "collect_hour",
+        "gender",
+        "stay_time"
+    ]
+
+    # 7. 연령대 관련 차트 데이터
+    df_age_day = df_base_gender.groupby(
+        ["formatted_date", "age"],
+        as_index=False
+    )["collect_cnt"].sum()
+
     df_age_day.columns = ["collect_date", "age", "cnt"]
 
-    df_age_pie = df_base.groupby("age", as_index=False)["collect_cnt"].sum()
+    df_age_pie = df_base.groupby(
+        "age",
+        as_index=False
+    )["collect_cnt"].sum()
+
     df_age_pie.columns = ["age", "cnt"]
 
-    df_age_hour = df_base.groupby(["collect_hour", "age"], as_index=False)["collect_cnt"].sum()
+    df_age_hour = df_base.groupby(
+        ["collect_hour", "age"],
+        as_index=False
+    )["collect_cnt"].sum()
+
     df_age_hour.columns = ["hour", "age", "cnt"]
 
-    df_age_hour_stay = df_stay_valid.groupby(["collect_hour", "age"], as_index=False)["stay_time"].mean()
+    df_age_hour_stay = df_stay_valid.groupby(
+        ["collect_hour", "age"],
+        as_index=False
+    )["stay_time"].mean()
+
     df_age_hour_stay["stay_time"] = df_age_hour_stay["stay_time"].round(1)
+
     df_age_hour_stay.columns = ["hour", "age", "stay_time"]
 
-    # 7. 방향별 및 기타 객체 차트 데이터
-    df_dir_day = df_base_gender.groupby(["formatted_date", "direction"], as_index=False)["collect_cnt"].sum()
+    # 8. 방향별 및 기타 객체 차트 데이터
+    df_dir_day = df_base_gender.groupby(
+        ["formatted_date", "direction"],
+        as_index=False
+    )["collect_cnt"].sum()
+
     df_dir_day.columns = ["collect_date", "direction", "cnt"]
 
-    df_dir_pie = df_base.groupby("direction", as_index=False)["collect_cnt"].sum()
+    df_dir_pie = df_base.groupby(
+        "direction",
+        as_index=False
+    )["collect_cnt"].sum()
+
     df_dir_pie.columns = ["direction", "cnt"]
 
-    df_dir_hour = df_base.groupby(["collect_hour", "direction"], as_index=False)["collect_cnt"].sum()
+    df_dir_hour = df_base.groupby(
+        ["collect_hour", "direction"],
+        as_index=False
+    )["collect_cnt"].sum()
+
     df_dir_hour.columns = ["collect_hour", "direction", "cnt"]
 
-    df_etc_pie = df_etc.groupby("class", as_index=False)["collect_cnt"].sum()
+    df_etc_pie = df_etc.groupby(
+        "class",
+        as_index=False
+    )["collect_cnt"].sum()
+
     df_etc_pie.columns = ["class", "cnt"]
 
-    df_etc_hour = df_etc.groupby(["collect_hour", "class"], as_index=False)["collect_cnt"].sum()
-    df_etc_hour["class"] = df_etc_hour["class"].map({"bycicle": "Bycicle", "stroller": "Stroller", "dog": "Dog"})
+    df_etc_hour = df_etc.groupby(
+        ["collect_hour", "class"],
+        as_index=False
+    )["collect_cnt"].sum()
+
+    df_etc_hour["class"] = df_etc_hour["class"].map({
+        "bycicle": "Bycicle",
+        "stroller": "Stroller",
+        "dog": "Dog"
+    })
+
     df_etc_hour.columns = ["collect_hour", "class", "cnt"]
 
     # ------------------------------------------------------------------------------
     # 3. 차트 딕셔너리 정의 (chart_height 속성 유지)
     # ------------------------------------------------------------------------------
-    chart_date = {"chart_id": "date_traffic", "title": "일자별 통행량", "type": "bar", "df": df_date, "x": "collect_date",
-                  "y": "cnt", "x_label": "일자", "y_label": "통행량", "chart_height": 460}
-    chart_hour_weekday_weekend = {"chart_id": "hour_weekday_weekend", "title": "시간대별 평균 통행량",
-                                  "type": "echarts_multi_line", "df": df_hour_ww, "index_col": "collect_hour",
-                                  "columns_col": "gubun", "values_col": "cnt", "y_name": "통행량", "chart_height": 400}
-    chart_date_stay = {"chart_id": "date_stay", "title": "일자별 평균 체류시간", "type": "bar", "df": df_date_stay,
-                       "x": "collect_date", "y": "cnt", "x_label": "일자", "y_label": "평균 체류시간", "chart_height": 450}
+    chart_date = {
+        "chart_id": "date_traffic",
+        "title": "일자별 통행량",
+        "type": "bar",
+        "df": df_date,
+        "x": "collect_date",
+        "y": "cnt",
+        "x_label": "일자",
+        "y_label": "통행량",
+        "chart_height": 460
+    }
 
-    # 💡 [추가] 체류시간 분포 파이차트 딕셔너리 정의
-    chart_stay_pie = {"chart_id": "stay_pie", "title": "체류시간 분포", "type": "echarts_pie", "df": df_stay_pie,
-                      "name_col": "stay_range", "value_col": "cnt", "semi_pie": None, "chart_height": 450}
+    chart_hour_weekday_weekend = {
+        "chart_id": "hour_weekday_weekend",
+        "title": "시간대별 평균 통행량",
+        "type": "echarts_multi_line",
+        "df": df_hour_ww,
+        "index_col": "collect_hour",
+        "columns_col": "gubun",
+        "values_col": "cnt",
+        "y_name": "통행량",
+        "chart_height": 400
+    }
+
+    chart_date_stay = {
+        "chart_id": "date_stay",
+        "title": "일자별 평균 체류시간",
+        "type": "bar",
+        "df": df_date_stay,
+        "x": "collect_date",
+        "y": "cnt",
+        "x_label": "일자",
+        "y_label": "평균 체류시간",
+        "chart_height": 450
+    }
+
+    # 체류시간 분포 파이차트
+    chart_stay_pie = {
+        "chart_id": "stay_pie",
+        "title": "체류시간 분포",
+        "type": "echarts_pie",
+        "df": df_stay_pie,
+        "name_col": "stay_range",
+        "value_col": "cnt",
+        "semi_pie": None,
+        "chart_height": 450
+    }
 
     chart_day_hour = {"chart_id": "day_hour_traffic", "title": "요일별/시간대별 평균 통행량", "type": "echarts_multi_line",
                       "df": df_day_hour, "index_col": "collect_hour", "columns_col": "collect_day", "values_col": "cnt",
