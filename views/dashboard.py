@@ -363,12 +363,14 @@ def render_location_map(selected_work_info: Dict[str, Any]):
         )
 
 
-def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8):
+def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8, df_h9, df_h10):
     """상단 주요 지표 카드를 출력합니다."""
     st.write(" ")
     col1, col2, col3, col4 = st.columns(4)
     st.write(" ")
     col5, col6, col7, col8 = st.columns(4)
+    st.write(" ")
+    col9, col10 = st.columns(2)
 
     def get_val_cnt(df, surfix):
         if df is not None and not df.empty and df.iloc[0, 0] is not None:
@@ -387,7 +389,9 @@ def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8):
     col5.metric("주중 평균 통행량", get_val_cnt(df_h5, "명"))
     col6.metric("주말 평균 통행량", get_val_cnt(df_h6, "명"))
     col7.metric("전체 평균 체류시간", get_val_sec(df_h7, "초"))
+    col9.metric("가중 평균 체류시간", get_val_sec(df_h9, "초"))
     col8.metric("체류시간 표준편차", get_val_sec(df_h8, "초"))
+    col10.metric("체류시간 중앙값", get_val_sec(df_h10, "초"))
 
 
 def render_chart_item(chart_info: Dict[str, Any]):
@@ -1145,7 +1149,7 @@ else:
 
     # 2. 데이터가 없을 경우 기본값 설정 및 Pandas 연산
     if df.empty:
-        h1_cnt, h2_avg, h3_avg, h4_avg, h5_weekday, h6_weekend, h7_stay, h8_stay = 0, 0, 0, 0, 0, 0, 0.0, 0.0
+        h1_cnt, h2_avg, h3_avg, h4_avg, h5_weekday, h6_weekend, h7_stay, h8_stay, h9_stay, h10_stay = 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0
         avg_daily_cnt = 0.0
     else:
         # [h1] 전체 총 통행량
@@ -1183,6 +1187,21 @@ else:
             h8_stay = float(std_val) if (std_val is not None and not pd.isna(std_val)) else 0.0
         else:
             h8_stay = 0.0
+
+        # [h9] 가중평균 체류시간 (통행량 collect_cnt 가중 반영)
+        if not df_stay.empty and df_stay["collect_cnt"].sum() > 0:
+            total_weighted_stay = (df_stay["stay_time"] * df_stay["collect_cnt"]).sum()
+            total_cnt = df_stay["collect_cnt"].sum()
+            h9_stay = float(total_weighted_stay / total_cnt)
+        else:
+            h9_stay = 0.0
+
+        # [h10] 체류시간 중앙값 (통행량 빈도 반영)
+        if not df_stay.empty and df_stay["collect_cnt"].sum() > 0:
+            expanded_stay = df_stay.loc[df_stay.index.repeat(df_stay["collect_cnt"]), "stay_time"]
+            h10_stay = float(expanded_stay.median())
+        else:
+            h10_stay = 0.0
 
     # 2. 등급 판정 및 색상 설정 로직
     if avg_daily_cnt >= 10000:
@@ -1270,7 +1289,9 @@ else:
         pd.DataFrame({"val": [h5_weekday]}),
         pd.DataFrame({"val": [h6_weekend]}),
         pd.DataFrame({"val": [h7_stay]}),
-        pd.DataFrame({"val": [h8_stay]})
+        pd.DataFrame({"val": [h8_stay]}),
+        pd.DataFrame({"val": [h9_stay]}),
+        pd.DataFrame({"val": [h10_stay]})
     )
     st.write(" ")
 
@@ -1630,494 +1651,14 @@ else:
     render_chart_grid([chart_direction, chart_dir_hour], cols_per_row=2)
     st.write(" ")
     st.write(" ")
+    render_comment_box(all_comments, comment_key="com6")
     st.write(" ")
     st.write(" ")
     render_chart_grid([chart_pictorial, chart_etc_hour], cols_per_row=2)
-    render_comment_box(all_comments, comment_key="com6")
+    render_section_header("", "종합 의견", "General Remarks")
+    render_comment_box(all_comments, comment_key="com7")
     st.write(" ")
     st.write(" ")
     st.write(" ")
     st.write(" ")
     render_info_footer(logo_path_or_url="images/logo_wide.png")
-
-    # # --------------------------------------------------------------------------
-    # # B. 차트 설정 메타데이터 정의
-    # # --------------------------------------------------------------------------
-    #
-    # # 1. 날짜별 통행량
-    # qr1 = "SELECT DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') AS collect_date, SUM(rca.collect_cnt) AS cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') ORDER BY MIN(STR_TO_DATE(rca.collect_date, '%Y%m%d'));"
-    # chart_date = {
-    #     "chart_id": "date_traffic",
-    #     "title": "일자별 통행량",
-    #     "type": "bar",
-    #     "df": conn.query(qr1.format(**variables1), ttl=0),
-    #     "x": "collect_date",
-    #     "y": "cnt",
-    #     "x_label": "일자",
-    #     "y_label": "통행량",
-    # }
-    #
-    # # 2. 시간대별 통행량 (주중/주말)
-    # qr3_combined = """
-    #     -- 1. 주중 (Weekday)
-    #     SELECT '주중' AS gubun, tt1.collect_hour, SUM(tt1.cnt) AS cnt
-    #     FROM (
-    #         SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt
-    #         FROM (
-    #             SELECT rca.collect_hour, rca.collect_date, SUM(rca.collect_cnt) AS cnt
-    #             FROM rt_collect_summary rca
-    #             JOIN rt_calendar c ON rca.collect_date = c.dt
-    #             WHERE rca.user_id = '{id}' AND rca.work_no = {work_no}
-    #               AND rca.collect_date >= '{start_date_str}' AND rca.collect_date <= '{end_date_str}'
-    #               AND rca.collect_hour >= '{start_time_str}' AND rca.collect_hour < '{end_time_str}'
-    #               AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
-    #               AND rca.del_yn = 0 AND c.anal_gubun = 'Weekday'
-    #             GROUP BY rca.collect_hour, rca.collect_date
-    #         ) t1 GROUP BY t1.collect_hour
-    #     ) tt1 GROUP BY tt1.collect_hour
-    #
-    #     UNION ALL
-    #
-    #     -- 2. 주말 (Weekend)
-    #     SELECT '주말' AS gubun, tt1.collect_hour, SUM(tt1.cnt) AS cnt
-    #     FROM (
-    #         SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt
-    #         FROM (
-    #             SELECT rca.collect_hour, rca.collect_date, SUM(rca.collect_cnt) AS cnt
-    #             FROM rt_collect_summary rca
-    #             JOIN rt_calendar c ON rca.collect_date = c.dt
-    #             WHERE rca.user_id = '{id}' AND rca.work_no = {work_no}
-    #               AND rca.collect_date >= '{start_date_str}' AND rca.collect_date <= '{end_date_str}'
-    #               AND rca.collect_hour >= '{start_time_str}' AND rca.collect_hour < '{end_time_str}'
-    #               AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
-    #               AND rca.del_yn = 0 AND c.anal_gubun = 'Weekend'
-    #             GROUP BY rca.collect_hour, rca.collect_date
-    #         ) t1 GROUP BY t1.collect_hour
-    #     ) tt1 GROUP BY tt1.collect_hour
-    #
-    #     UNION ALL
-    #
-    #     -- 3. 전체 (Total - 평일+주말 구분 없는 전체 기준)
-    #     SELECT '전체' AS gubun, tt1.collect_hour, SUM(tt1.cnt) AS cnt
-    #     FROM (
-    #         SELECT t1.collect_hour, ROUND(AVG(t1.cnt)) AS cnt
-    #         FROM (
-    #             SELECT rca.collect_hour, rca.collect_date, SUM(rca.collect_cnt) AS cnt
-    #             FROM rt_collect_summary rca
-    #             WHERE rca.user_id = '{id}' AND rca.work_no = {work_no}
-    #               AND rca.collect_date >= '{start_date_str}' AND rca.collect_date <= '{end_date_str}'
-    #               AND rca.collect_hour >= '{start_time_str}' AND rca.collect_hour < '{end_time_str}'
-    #               AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
-    #               AND rca.del_yn = 0
-    #             GROUP BY rca.collect_hour, rca.collect_date
-    #         ) t1 GROUP BY t1.collect_hour
-    #     ) tt1 GROUP BY tt1.collect_hour
-    #
-    #     ORDER BY collect_hour, gubun
-    # """
-    #
-    # chart_hour_weekday_weekend = {
-    #     "chart_id": "hour_weekday_weekend",
-    #     "title": "시간대별 평균 통행량",
-    #     "type": "echarts_multi_line",
-    #     "df": conn.query(qr3_combined.format(**variables1), ttl=0),
-    #     "index_col": "collect_hour",
-    #     "columns_col": "gubun",
-    #     "values_col": "cnt",
-    #     "y_name": "통행량",
-    # }
-    #
-    # # 1. 날짜별 평균 체류시간
-    # qr1_stay_perday = "SELECT DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') AS collect_date, AVG(rca.stay_time) AS cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') ORDER BY MIN(STR_TO_DATE(rca.collect_date, '%Y%m%d'));"
-    # chart_date_stay = {
-    #     "chart_id": "date_stay",
-    #     "title": "일자별 평균 체류시간",
-    #     "type": "bar",
-    #     "df": conn.query(qr1_stay_perday.format(**variables1), ttl=0),
-    #     "x": "collect_date",
-    #     "y": "cnt",
-    #     "x_label": "일자",
-    #     "y_label": "평균 체류시간",
-    # }
-    #
-    # # 3. 요일/시간대별 통행량 및 체류시간
-    # qr2 = "SELECT t1.collect_hour, t1.collect_day, t1.collect_order, avg(t1.cnt) as cnt FROM (SELECT (CASE WHEN rca.collect_day = 'Sun' THEN '일' WHEN rca.collect_day = 'Mon' THEN '월' WHEN rca.collect_day = 'Tue' THEN '화' WHEN rca.collect_day = 'Wed' THEN '수' WHEN rca.collect_day = 'Thu' THEN '목' WHEN rca.collect_day = 'Fri' THEN '금' WHEN rca.collect_day = 'Sat' THEN '토' END) as collect_day, (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order, rca.collect_hour, rca.collect_date, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order"
-    # chart_day_hour = {
-    #     "chart_id": "day_hour_traffic",
-    #     "title": "요일별/시간대별 평균 통행량",
-    #     "type": "echarts_multi_line",
-    #     "df": conn.query(qr2.format(**variables1), ttl=0),
-    #     "index_col": "collect_hour",
-    #     "columns_col": "collect_day",
-    #     "values_col": "cnt",
-    #     "y_name": "통행량",
-    # }
-    #
-    # qr20 = "SELECT t1.collect_hour, t1.collect_day, t1.collect_order, round(avg(t1.stay_time), 1) as stay_time FROM (SELECT (CASE WHEN rca.collect_day = 'Sun' THEN '일' WHEN rca.collect_day = 'Mon' THEN '월' WHEN rca.collect_day = 'Tue' THEN '화' WHEN rca.collect_day = 'Wed' THEN '수' WHEN rca.collect_day = 'Thu' THEN '목' WHEN rca.collect_day = 'Fri' THEN '금' WHEN rca.collect_day = 'Sat' THEN '토' END) as collect_day, (CASE WHEN rca.collect_day = 'Sun' THEN 1 WHEN rca.collect_day = 'Mon' THEN 2 WHEN rca.collect_day = 'Tue' THEN 3 WHEN rca.collect_day = 'Wed' THEN 4 WHEN rca.collect_day = 'Thu' THEN 5 WHEN rca.collect_day = 'Fri' THEN 6 WHEN rca.collect_day = 'Sat' THEN 7 END) as collect_order, rca.collect_hour, rca.collect_date, avg(rca.stay_time) as stay_time FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 AND rca.stay_time <> 99999 GROUP BY collect_day, collect_order, rca.collect_hour, rca.collect_date) t1 GROUP BY t1.collect_hour, t1.collect_day, t1.collect_order ORDER BY t1.collect_hour, t1.collect_day, t1.collect_order"
-    # chart_day_hour_stay_time = {
-    #     "chart_id": "day_hour_stay",
-    #     "title": "요일별/시간대별 평균 체류시간",
-    #     "type": "echarts_multi_line",
-    #     "df": conn.query(qr20.format(**variables1), ttl=0),
-    #     "index_col": "collect_hour",
-    #     "columns_col": "collect_day",
-    #     "values_col": "stay_time",
-    #     "y_name": "체류시간(초)",
-    # }
-    #
-    # # 4. 성별 일자별 차트
-    # qr20_1 = """select (CASE WHEN rca.gender = 'male' THEN '남성' WHEN rca.gender = 'female' THEN '여성' END) as gender, DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') AS collect_date, sum(rca.collect_cnt) as cnt
-    #               from rt_collect_summary rca
-    #                 WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}'
-    #                     and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
-    #                     AND (rca.class like 'm%' OR rca.class like 'w%')
-    #                     AND rca.del_yn = 0
-    #                     AND rca.stay_time <> 99999
-    #               group by (CASE WHEN rca.gender = 'male' THEN '남성' WHEN rca.gender = 'female' THEN '여성' END), DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d')"""
-    #
-    # chart_gender_day = {
-    #     "title": "일자별 성별 통행량 분석",
-    #     "type": "echarts_multi_bar_gender",
-    #     "df": conn.query(qr20_1.format(**variables1), ttl=0),
-    #     "index_col": "collect_date",  # X축이 될 열 이름 (예: 일자)
-    #     "columns_col": "gender",  # 범례(남/여)로 분리할 열 이름
-    #     "values_col": "cnt",  # 수치 값이 들어있는 열 이름
-    #     "y_name": "통행량(명)",
-    #     "stacked": True  # True면 누적 바 차트, False면 나란히 배치되는 그룹 바 차트
-    # }
-    #
-    #
-    # qr21 = "SELECT (CASE WHEN rca.gender = 'male' THEN '남성' WHEN rca.gender = 'female' THEN '여성' END) as gender, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY (CASE WHEN rca.gender = 'male' THEN '남성' WHEN rca.gender = 'female' THEN '여성' END)"
-    # chart_gender = {
-    #     "chart_id": "gender_pie",
-    #     "title": "성별 통행량",
-    #     "type": "echarts_pie",
-    #     "df": conn.query(qr21.format(**variables1), ttl=0),
-    #     "name_col": "gender",
-    #     "value_col": "cnt",
-    #     "semi_pie": None
-    # }
-    #
-    # qr22 = """
-    #     SELECT
-    #         t1.collect_hour AS collect_hour,
-    #         (CASE WHEN t1.gender_code = 'male' THEN '남성'
-    #               WHEN t1.gender_code = 'female' THEN '여성' END) AS gender,
-    #         ROUND(AVG(t1.cnt)) AS cnt
-    #     FROM (
-    #         SELECT
-    #             rca.collect_hour AS collect_hour,
-    #             rca.gender AS gender_code,
-    #             rca.collect_date AS collect_date,
-    #             SUM(rca.collect_cnt) AS cnt
-    #         FROM rt_collect_summary rca
-    #         WHERE rca.user_id = '{id}'
-    #           AND rca.work_no = {work_no}
-    #           and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
-    #           AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
-    #           AND rca.del_yn = 0
-    #         GROUP BY rca.collect_hour, rca.gender, rca.collect_date
-    #     ) t1
-    #     GROUP BY t1.collect_hour, t1.gender_code
-    #     ORDER BY t1.collect_hour
-    # """
-    #
-    # chart_gender_hour = {
-    #     "chart_id": "gender_hour",
-    #     "title": "성별/시간대별 평균 통행량",
-    #     "type": "echarts_multi_line",
-    #     "df": conn.query(qr22.format(**variables1), ttl=0),
-    #     "index_col": "collect_hour",
-    #     "columns_col": "gender",
-    #     "values_col": "cnt",
-    #     "y_name": "통행량",
-    # }
-    #
-    # qr25 = """
-    #         SELECT
-    #             t1.collect_hour AS collect_hour,
-    #             (CASE WHEN t1.gender_code = 'male' THEN '남성'
-    #                   WHEN t1.gender_code = 'female' THEN '여성' END) AS gender,
-    #             ROUND(AVG(t1.stay_time),1) AS stay_time
-    #         FROM (
-    #             SELECT
-    #                 rca.collect_hour AS collect_hour,
-    #                 rca.gender AS gender_code,
-    #                 rca.collect_date AS collect_date,
-    #                 AVG(rca.stay_time) AS stay_time
-    #             FROM rt_collect_summary rca
-    #             WHERE rca.user_id = '{id}'
-    #               AND rca.work_no = {work_no}
-    #               and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
-    #               AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
-    #               AND rca.del_yn = 0
-    #             GROUP BY rca.collect_hour, rca.gender, rca.collect_date
-    #         ) t1
-    #         GROUP BY t1.collect_hour, t1.gender_code
-    #         ORDER BY t1.collect_hour
-    #     """
-    #
-    # chart_gender_hour_stay = {
-    #     "chart_id": "gender_hour_stay",
-    #     "title": "성별/시간대별 평균 체류시간",
-    #     "type": "echarts_multi_line",
-    #     "df": conn.query(qr25.format(**variables1), ttl=0),
-    #     "index_col": "collect_hour",
-    #     "columns_col": "gender",
-    #     "values_col": "stay_time",
-    #     "y_name": "체류시간",
-    # }
-    #
-    # # 5. 연령별 일자별 차트
-    # qr23_1 = """select rca.age as age, DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') AS collect_date, sum(rca.collect_cnt) as cnt
-    #                   from rt_collect_summary rca
-    #                     WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}'
-    #                         and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
-    #                         AND (rca.class like 'm%' OR rca.class like 'w%')
-    #                         AND rca.del_yn = 0
-    #                         AND rca.stay_time <> 99999
-    #                   group by rca.age, DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d')"""
-    #
-    # chart_age_day = {
-    #     "title": "일자별 연령별 통행량 분석",
-    #     "type": "echarts_multi_bar_age",
-    #     "df": conn.query(qr23_1.format(**variables1), ttl=0),
-    #     "index_col": "collect_date",  # X축이 될 열 이름 (예: 일자)
-    #     "columns_col": "age",  # 연령대
-    #     "values_col": "cnt",  # 수치 값이 들어있는 열 이름
-    #     "y_name": "통행량(명)",
-    #     "stacked": True  # True면 누적 바 차트, False면 나란히 배치되는 그룹 바 차트
-    # }
-    #
-    # # 5. 연령별 차트
-    # qr23 = "SELECT t1.age as age, (CASE WHEN t1.age = '10대 이하' THEN 1 WHEN t1.age = '20~30대' THEN 2 WHEN t1.age = '40~50대' THEN 3 WHEN t1.age = '60~70대' THEN 4 END) as age_order, sum(t1.cnt) as cnt FROM (SELECT rca.age as age, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.age UNION ALL SELECT age, cnt FROM rt_dummy_age2) t1 GROUP BY t1.age ORDER BY age_order"
-    # chart_age = {
-    #     "chart_id": "age_pie",
-    #     "title": "연령별 통행량",
-    #     "type": "echarts_pie",
-    #     "df": conn.query(qr23.format(**variables1), ttl=0),
-    #     "name_col": "age",
-    #     "value_col": "cnt",
-    #     "semi_pie": None
-    # }
-    #
-    # qr24 = "SELECT t1.collect_hour as hour, t1.age as age, sum(t1.cnt) as cnt FROM (SELECT rca.collect_hour as collect_hour, rca.age as age, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') and rca.del_yn = 0 GROUP BY rca.collect_hour, rca.age) t1 GROUP BY t1.collect_hour, t1.age"
-    # chart_age_hour = {
-    #     "chart_id": "age_hour",
-    #     "title": "연령별(시간대) 평균 통행량",
-    #     "type": "echarts_multi_line",
-    #     "df": conn.query(qr24.format(**variables1), ttl=0),
-    #     "index_col": "hour",
-    #     "columns_col": "age",
-    #     "values_col": "cnt",
-    #     "y_name": "통행량",
-    # }
-    #
-    # # 연령별 체류시간
-    # qr24 = "SELECT t1.collect_hour as hour, t1.age as age, ROUND(AVG(t1.stay_time),1) as stay_time FROM (SELECT rca.collect_hour as collect_hour, rca.age as age, avg(rca.stay_time) as stay_time FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') and rca.del_yn = 0 GROUP BY rca.collect_hour, rca.age) t1 GROUP BY t1.collect_hour, t1.age"
-    # chart_age_hour = {
-    #     "chart_id": "age_hour_stay",
-    #     "title": "연령별(시간대) 평균 체류시간",
-    #     "type": "echarts_multi_line",
-    #     "df": conn.query(qr24.format(**variables1), ttl=0),
-    #     "index_col": "hour",
-    #     "columns_col": "age",
-    #     "values_col": "stay_time",
-    #     "y_name": "체류시간",
-    # }
-    #
-    # # 5. 연령별 일자별 차트
-    # qr30 = """select rca.direction as direction, DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d') AS collect_date, sum(rca.collect_cnt) as cnt
-    #                       from rt_collect_summary rca
-    #                         WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}'
-    #                             and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}'
-    #                             AND (rca.class like 'm%' OR rca.class like 'w%')
-    #                             AND rca.del_yn = 0
-    #                             AND rca.stay_time <> 99999
-    #                       group by rca.direction, DATE_FORMAT(STR_TO_DATE(rca.collect_date, '%Y%m%d'), '%m/%d')"""
-    #
-    # chart_direction_day = {
-    #     "title": "일자별 방향별 통행량 분석",
-    #     "type": "echarts_multi_bar_direction",
-    #     "df": conn.query(qr30.format(**variables1), ttl=0),
-    #     "index_col": "collect_date",  # X축이 될 열 이름 (예: 일자)
-    #     "columns_col": "direction",  # 방향
-    #     "values_col": "cnt",  # 수치 값이 들어있는 열 이름
-    #     "y_name": "통행량(명)",
-    #     "stacked": True  # True면 누적 바 차트, False면 나란히 배치되는 그룹 바 차트
-    # }
-    #
-    # # 6. 방향별 차트
-    # qr31 = "SELECT rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.direction"
-    # chart_direction = {
-    #     "chart_id": "direction_pie",
-    #     "title": "방향별 통행량",
-    #     "type": "echarts_pie",
-    #     "df": conn.query(qr31.format(**variables1), ttl=0),
-    #     "name_col": "direction",
-    #     "value_col": "cnt",
-    #     "semi_pie": None
-    # }
-    #
-    # qr32 = "SELECT rca.collect_hour as collect_hour, rca.direction as direction, sum(rca.collect_cnt) as cnt FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.del_yn = 0 GROUP BY rca.collect_hour, rca.direction"
-    # chart_dir_hour = {
-    #     "chart_id": "dir_hour",
-    #     "title": "방향별(시간대) 평균 통행량",
-    #     "type": "echarts_multi_line",
-    #     "df": conn.query(qr32.format(**variables1), ttl=0),
-    #     "index_col": "collect_hour",
-    #     "columns_col": "direction",
-    #     "values_col": "cnt",
-    #     "y_name": "통행량",
-    # }
-    #
-    # # 자전거, 유모차, 애완견 통행량 쿼리
-    # qr_pictorial = """
-    #         SELECT (CASE WHEN rca.class = 'bycicle' THEN 'bycicle'
-    #                      WHEN rca.class = 'stroller' THEN 'stroller'
-    #                      WHEN rca.class = 'dog' THEN 'dog' END) AS class,
-    #                SUM(rca.collect_cnt) AS cnt
-    #           FROM rt_collect_summary rca
-    #          WHERE rca.user_id = '{id}' AND rca.work_no = {work_no}
-    #            AND rca.collect_date >= '{start_date_str}' AND rca.collect_date <= '{end_date_str}'
-    #            AND rca.collect_hour >= '{start_time_str}' AND rca.collect_hour < '{end_time_str}'
-    #            AND rca.class IN ('bycicle', 'stroller', 'dog')
-    #            AND rca.del_yn = 0
-    #            AND rca.stay_time <> 99999
-    #          GROUP BY class
-    #     """
-    #
-    # chart_pictorial = {
-    #     "chart_id": "pictorial_features",
-    #     "title": "기타 객체 통행량 분석",
-    #     "type": "echarts_icon_bar",  # 👈 타입 변경
-    #     "df": conn.query(qr_pictorial.format(**variables1), ttl=0),
-    #     "name_col": "class",
-    #     "value_col": "cnt",
-    # }
-    #
-    # qr99 = """
-    #             select t1.collect_hour as collect_hour
-    #             , (CASE WHEN t1.class = 'bycicle' THEN 'Bycicle'
-    #                     WHEN t1.class = 'stroller' THEN 'Stroller'
-    #                     WHEN t1.class = 'dog' THEN 'Dog' END) as class
-    #             , (CASE WHEN t1.class = 'bycicle' THEN 1
-    #                     WHEN t1.class = 'stroller' THEN 2
-    #                     WHEN t1.class = 'dog' THEN 3 END) as class_order
-    #                 , sum(t1.cnt) as cnt
-    #         from (
-    #             select rca.collect_hour as collect_hour, rca.class as class, sum(rca.collect_cnt) as cnt
-    #               from rt_collect_summary rca
-    #              WHERE rca.user_id = '{id}' AND rca.work_no = {work_no}
-    #                AND rca.collect_date >= '{start_date_str}' AND rca.collect_date <= '{end_date_str}'
-    #                AND rca.collect_hour >= '{start_time_str}' AND rca.collect_hour < '{end_time_str}'
-    #                AND rca.class IN ('bycicle', 'stroller', 'dog')
-    #                AND rca.del_yn = 0
-    #                AND rca.stay_time <> 99999
-    #               group by rca.collect_hour, rca.class) t1
-    #         group by t1.collect_hour, t1.class
-    #         """
-    # chart_etc_hour = {
-    #     "chart_id": "etc_hour",
-    #     "title": "기타 객체(시간대) 평균 통행량",
-    #     "type": "echarts_multi_line",
-    #     "df": conn.query(qr99.format(**variables1), ttl=0),
-    #     "index_col": "collect_hour",
-    #     "columns_col": "class",
-    #     "values_col": "cnt",
-    #     "y_name": "통행량",
-    # }
-    #
-    # # --------------------------------------------------------------------------
-    # # C. 대시보드 레이아웃 구성
-    # # --------------------------------------------------------------------------
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_date], cols_per_row=1)
-    # st.write(" ")
-    # st.write(" ")
-    # render_section_header("🕒", "시간대 분석", "Timeline Analysis")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_hour_weekday_weekend], cols_per_row=1)
-    # st.write(" ")
-    # st.write(" ")
-    # render_comment_box(all_comments, comment_key="com1")
-    # st.write(" ")
-    # st.write(" ")
-    # render_section_header("🗓️", "요일 분석", "Week Analysis")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_day_hour], cols_per_row=1)
-    # st.write(" ")
-    # st.write(" ")
-    # render_comment_box(all_comments, comment_key="com2")
-    # st.write(" ")
-    # st.write(" ")
-    # render_section_header("⏱️", "체류시간 분석", "Stay Time Analysis")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_date_stay], cols_per_row=1)
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_day_hour_stay_time], cols_per_row=1)
-    # st.write(" ")
-    # st.write(" ")
-    # render_comment_box(all_comments, comment_key="com3")
-    # st.write(" ")
-    # st.write(" ")
-    # render_section_header("🚻", "성별 분석", "Gender Analysis")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_gender_day], cols_per_row=1)
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_gender, chart_gender_hour], cols_per_row=2)
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_gender_hour_stay], cols_per_row=1)
-    # st.write(" ")
-    # st.write(" ")
-    # render_comment_box(all_comments, comment_key="com4")
-    # st.write(" ")
-    # st.write(" ")
-    # render_section_header("👥", "연령대 분석", "Age Analysis")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_age_day], cols_per_row=1)
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_age, chart_age_hour], cols_per_row=2)
-    # st.write(" ")
-    # st.write(" ")
-    # render_comment_box(all_comments, comment_key="com5")
-    # st.write(" ")
-    # st.write(" ")
-    # render_section_header("🚲", "기타 분석", "Additional Analysis")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_direction_day], cols_per_row=1)
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_direction, chart_dir_hour], cols_per_row=2)
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # render_chart_grid([chart_pictorial, chart_etc_hour], cols_per_row=2)
-    # render_comment_box(all_comments, comment_key="com6")
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # st.write(" ")
-    # render_info_footer(logo_path_or_url="images/logo_wide.png")

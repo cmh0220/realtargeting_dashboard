@@ -715,12 +715,14 @@ def render_location_map(selected_work_info: Dict[str, Any]):
         )
 
 
-def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8):
+def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8, df_h9, df_h10):
     """상단 주요 지표 카드를 출력합니다."""
     st.write(" ")
     col1, col2, col3, col4 = st.columns(4)
     st.write(" ")
     col5, col6, col7, col8 = st.columns(4)
+    st.write(" ")
+    col9, col10 = st.columns(2)
 
     def get_val_cnt(df, surfix):
         if df is not None and not df.empty and df.iloc[0, 0] is not None:
@@ -739,7 +741,9 @@ def render_metric_cards(df_h1, df_h2, df_h3, df_h4, df_h5, df_h6, df_h7, df_h8):
     col5.metric("주중 평균 통행량", get_val_cnt(df_h5, "명"))
     col6.metric("주말 평균 통행량", get_val_cnt(df_h6, "명"))
     col7.metric("전체 평균 체류시간", get_val_sec(df_h7, "초"))
+    col9.metric("가중 평균 체류시간", get_val_sec(df_h9, "초"))
     col8.metric("체류시간 표준편차", get_val_sec(df_h8, "초"))
+    col10.metric("체류시간 중앙값", get_val_sec(df_h10, "초"))
 
 
 def render_chart_item(chart_info: Dict[str, Any]):
@@ -1525,7 +1529,7 @@ else:
 
     # 2. 데이터가 없을 경우 기본값 설정 및 Pandas 연산
     if df.empty:
-        h1_cnt, h2_avg, h3_avg, h4_avg, h5_weekday, h6_weekend, h7_stay, h8_stay = 0, 0, 0, 0, 0, 0, 0.0, 0.0
+        h1_cnt, h2_avg, h3_avg, h4_avg, h5_weekday, h6_weekend, h7_stay, h8_stay, h9_stay, h10_stay = 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0
         avg_daily_cnt = 0.0
     else:
         # [h1] 전체 총 통행량
@@ -1563,6 +1567,21 @@ else:
             h8_stay = float(std_val) if (std_val is not None and not pd.isna(std_val)) else 0.0
         else:
             h8_stay = 0.0
+
+        # [h9] 가중평균 체류시간 (통행량 collect_cnt 가중 반영)
+        if not df_stay.empty and df_stay["collect_cnt"].sum() > 0:
+            total_weighted_stay = (df_stay["stay_time"] * df_stay["collect_cnt"]).sum()
+            total_cnt = df_stay["collect_cnt"].sum()
+            h9_stay = float(total_weighted_stay / total_cnt)
+        else:
+            h9_stay = 0.0
+
+        # [h10] 체류시간 중앙값 (통행량 빈도 반영)
+        if not df_stay.empty and df_stay["collect_cnt"].sum() > 0:
+            expanded_stay = df_stay.loc[df_stay.index.repeat(df_stay["collect_cnt"]), "stay_time"]
+            h10_stay = float(expanded_stay.median())
+        else:
+            h10_stay = 0.0
 
     # 2. 등급 판정 및 색상 설정 로직
     if avg_daily_cnt >= 10000:
@@ -1639,7 +1658,6 @@ else:
 
     st.write(" ")
     st.write(" ")
-    st.write(" ")
 
     # 5. 기존 함수 규격에 맞게 1행짜리 DataFrame으로 포장해서 전달
     render_metric_cards(
@@ -1650,7 +1668,9 @@ else:
         pd.DataFrame({"val": [h5_weekday]}),
         pd.DataFrame({"val": [h6_weekend]}),
         pd.DataFrame({"val": [h7_stay]}),
-        pd.DataFrame({"val": [h8_stay]})
+        pd.DataFrame({"val": [h8_stay]}),
+        pd.DataFrame({"val": [h9_stay]}),
+        pd.DataFrame({"val": [h10_stay]})
     )
     st.write(" ")
 
@@ -1828,7 +1848,7 @@ else:
     # 3. 차트 딕셔너리 정의 (chart_height 속성 유지)
     # ------------------------------------------------------------------------------
     chart_date = {"chart_id": "date_traffic", "title": "일자별 통행량", "type": "bar", "df": df_date, "x": "collect_date",
-                  "y": "cnt", "x_label": "일자", "y_label": "통행량", "chart_height": 530}
+                  "y": "cnt", "x_label": "일자", "y_label": "통행량", "chart_height": 460}
     chart_hour_weekday_weekend = {"chart_id": "hour_weekday_weekend", "title": "시간대별 평균 통행량",
                                   "type": "echarts_multi_line", "df": df_hour_ww, "index_col": "collect_hour",
                                   "columns_col": "gubun", "values_col": "cnt", "y_name": "통행량", "chart_height": 400}
@@ -1872,23 +1892,22 @@ else:
 
     chart_direction_day = {"title": "일자별 방향별 통행량 분석", "type": "echarts_multi_bar_direction", "df": df_dir_day,
                            "index_col": "collect_date", "columns_col": "direction", "values_col": "cnt",
-                           "y_name": "통행량(명)", "stacked": True, "chart_height": 500}
+                           "y_name": "통행량(명)", "stacked": True, "chart_height": 400}
     chart_direction = {"chart_id": "direction_pie", "title": "방향별 통행량", "type": "echarts_pie", "df": df_dir_pie,
-                       "name_col": "direction", "value_col": "cnt", "semi_pie": None, "chart_height": 550}
+                       "name_col": "direction", "value_col": "cnt", "semi_pie": None, "chart_height": 400}
     chart_dir_hour = {"chart_id": "dir_hour", "title": "방향별(시간대) 평균 통행량", "type": "echarts_multi_line",
                       "df": df_dir_hour, "index_col": "collect_hour", "columns_col": "direction", "values_col": "cnt",
-                      "y_name": "통행량", "chart_height": 500}
+                      "y_name": "통행량", "chart_height": 400}
 
     chart_pictorial = {"chart_id": "pictorial_features", "title": "기타 객체 통행량 분석", "type": "echarts_icon_bar",
-                       "df": df_etc_pie, "name_col": "class", "value_col": "cnt", "chart_height": 450}
+                       "df": df_etc_pie, "name_col": "class", "value_col": "cnt", "chart_height": 350}
     chart_etc_hour = {"chart_id": "etc_hour", "title": "기타 객체(시간대) 평균 통행량", "type": "echarts_multi_line",
                       "df": df_etc_hour, "index_col": "collect_hour", "columns_col": "class", "values_col": "cnt",
-                      "y_name": "통행량", "chart_height": 450}
+                      "y_name": "통행량", "chart_height": 350}
 
     # --------------------------------------------------------------------------
     # C. 대시보드 레이아웃 구성
     # --------------------------------------------------------------------------
-    st.write(" ")
     st.write(" ")
     render_chart_grid([chart_date], cols_per_row=1)
     st.write(" ")
@@ -1896,7 +1915,6 @@ else:
     render_comment_box(all_comments, comment_key="com1")
     st.markdown('<div style="text-align: right;" class="copyright">Copyright © 2026. All Rights Reserved.</div>',
                 unsafe_allow_html=True)
-    st.write(" ")
     st.write(" ")
     st.write(" ")
     st.write(" ")
@@ -1971,6 +1989,9 @@ else:
     st.write(" ")
     st.write(" ")
     render_chart_grid([chart_direction, chart_dir_hour], cols_per_row=2)
+    st.write(" ")
+    st.write(" ")
+    render_comment_box(all_comments, comment_key="com6")
     st.markdown('<div style="text-align: right;" class="copyright">Copyright © 2026. All Rights Reserved.</div>', unsafe_allow_html=True)
     st.write(" ")
     st.write(" ")
@@ -1978,10 +1999,9 @@ else:
     st.write(" ")
     st.write(" ")
     st.write(" ")
-    st.write(" ")
     render_chart_grid([chart_pictorial, chart_etc_hour], cols_per_row=2)
-    st.write(" ")
-    st.write(" ")
+    render_section_header("", "종합 의견", "General Remarks")
+    render_comment_box(all_comments, comment_key="com7")
     st.write(" ")
     st.write(" ")
     render_info_footer(logo_path_or_url="images/logo_wide.png")
