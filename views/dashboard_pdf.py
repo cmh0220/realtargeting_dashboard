@@ -1933,12 +1933,6 @@ else:
             columns=["collect_date", "cnt"]
         )
 
-    df_date_stay = df_stay_valid.groupby(
-        "formatted_date", as_index=False
-    )["stay_time"].mean()
-
-    df_date_stay.columns = ["collect_date", "cnt"]
-
     # 4. 체류시간 분포 파이차트용 데이터 가공
     # 개인별 원본 데이터의 실제 행 개수를 기준으로 집계
     bins = [-1, 5, 10, 60, 600, float("inf")]

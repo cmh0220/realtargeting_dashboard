@@ -1531,12 +1531,6 @@ else:
             columns=["collect_date", "cnt"]
         )
 
-    df_date_stay = df_stay_valid.groupby(
-        "formatted_date"
-    )["stay_time"].mean().reset_index()
-
-    df_date_stay.columns = ["collect_date", "cnt"]
-
     # ------------------------------------------------------------------------------
     # 4. 체류시간 분포 파이차트용 데이터 가공
     #    원천데이터에서 개인별 체류시간을 조회하여 실제 인원수 계산
