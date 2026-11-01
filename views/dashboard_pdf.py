@@ -1914,7 +1914,7 @@ else:
             df_date_stay_raw
             .groupby("collect_date")["stay_time"]
             .mean()
-            .round()
+            .round(1)
             .reset_index()
         )
 
