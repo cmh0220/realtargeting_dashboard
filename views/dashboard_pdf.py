@@ -607,7 +607,7 @@ def render_comment_box(comments_dict: dict, comment_key: str = "com1"):
                 border-radius: 6px;
                 padding: 20px;                      /* 🌟 상하좌우 모든 방향에 동일하게 4px 적용 */
                 margein-left: 2px;
-                font-size: 15px;
+                font-size: 13px;
                 color: #212529;
                 line-height: 1.6;
                 white-space: pre-line;
