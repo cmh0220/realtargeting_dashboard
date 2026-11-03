@@ -1244,6 +1244,7 @@ end_time_raw = format_time_str(selected_work_info.get("종료시간") or selecte
 
 # 1. 날짜에서 '-' 제거하여 YYYYMMDD 형태로 변환
 start_date_str = str(start_date_raw).replace("-", "").strip()
+end_date_str_for_weather = str(end_date_raw).replace("-", "").strip()
 end_date_str = str(end_date_raw).replace("-", "").strip()
 
 # 2. 시간에서 ':'를 제거하고 HH (시) 2자리만 추출
@@ -1302,16 +1303,16 @@ else:
             lat_float = float(lat_val)
             lng_float = float(lng_val)
 
-            if len(start_date_str) == 8 and len(end_date_str) == 8:
+            if len(start_date_str) == 8 and len(end_date_str_for_weather) == 8:
                 api_start_date = f"{start_date_str[:4]}-{start_date_str[4:6]}-{start_date_str[6:]}"
-                api_end_date = f"{end_date_str[:4]}-{end_date_str[4:6]}-{end_date_str[6:]}"
+                api_end_date = f"{end_date_str_for_weather[:4]}-{end_date_str_for_weather[4:6]}-{end_date_str_for_weather[6:]}"
 
                 # 종료일 미래 날짜 방지 로직
                 max_available_date = date.today() - timedelta(days=1)
                 max_available_date = str(max_available_date).replace("-", "").strip()
 
                 try:
-                    if end_date_str > max_available_date:
+                    if end_date_str_for_weather > max_available_date:
                         api_end_date = f"{max_available_date[:4]}-{max_available_date[4:6]}-{max_available_date[6:]}"
 
                         if start_date_str > max_available_date:
