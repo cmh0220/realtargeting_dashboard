@@ -1,5 +1,12 @@
 [client]
 showSidebarNavigation = true
+toolbarMode = "minimal"
+# 상세 에러 스택 트레이스 표시 여부 (디버깅용: true, 운영용: false)
+showErrorDetails = true
+
+[server]
+# 파일 변경 시 자동 새로고침 여부 (개발용: true, 운영용: false 권장)
+runOnSave = false
 
 [theme]
 base = "light"

@@ -7,7 +7,7 @@ from sqlalchemy import text
 # Page & Layout Config
 # ===================================================================
 st.set_page_config(
-    page_title="리얼타겟팅 대시보드5",  # 웹사이트 탭에 표시될 제목
+    page_title="리얼타겟팅 대시보드",  # 웹사이트 탭에 표시될 제목
     page_icon="images/logo_small3.ico",
     layout="wide")
 
