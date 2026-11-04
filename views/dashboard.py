@@ -32,6 +32,7 @@ install_report_viewer()
 
 
 # 2. PDF 생성 핵심 함수
+# 2. PDF 생성 핵심 함수
 def get_pdf_bytes(user_id: str, work_no: str):
     base_url = os.getenv("STREAMLIT_BASE_URL", "http://localhost:8501")
     if base_url.startswith("http://"):
@@ -39,32 +40,35 @@ def get_pdf_bytes(user_id: str, work_no: str):
     else:
         clean_base = f"http://{base_url}"
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
-        )
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
+            )
 
-        page = browser.new_page(
-            viewport={'width': 1200, 'height': 1600},
-            device_scale_factor=2
-        )
+            page = browser.new_page(
+                viewport={'width': 1200, 'height': 1600},
+                device_scale_factor=2
+            )
 
-        target_url = f"{clean_base}/dashboard_pdf?export_mode=true&user_id={user_id}&work_no={work_no}"
+            target_url = f"{clean_base}/dashboard_pdf?export_mode=true&user_id={user_id}&work_no={work_no}"
 
-        # 💡 'networkidle' 대신 'domcontentloaded'로 변경 (웹소켓 통신 대기 방지)
-        page.goto(target_url, wait_until='domcontentloaded', timeout=60000)
+            page.goto(target_url, wait_until='domcontentloaded', timeout=60000)
+            page.wait_for_timeout(5000)
 
-        # ECharts, Folium 등 차트가 완전히 그려질 수 있도록 충분히 대기 (7초)
-        page.wait_for_timeout(5000)
+            pdf_bytes = page.pdf(
+                format='A4',
+                print_background=True,
+                margin={'top': '10mm', 'bottom': '10mm', 'left': '10mm', 'right': '10mm'}
+            )
+            browser.close()
+            return pdf_bytes
 
-        pdf_bytes = page.pdf(
-            format='A4',
-            print_background=True,
-            margin={'top': '10mm', 'bottom': '10mm', 'left': '10mm', 'right': '10mm'}
-        )
-        browser.close()
-        return pdf_bytes
+    except Exception as e:
+        # 💡 다운로드 버튼 안에서 에러가 터질 때 원인을 화면에 출력
+        st.error(f"❌ PDF 생성 중 오류 발생: {e}")
+        raise e
 
 
 # Helper 함수: YYYYMMDD -> YYYY-MM-DD
