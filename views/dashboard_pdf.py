@@ -10,6 +10,7 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import pandas as pd
 import requests
 from streamlit_echarts import JsCode
+import numpy as np
 
 
 # 3. Open-Meteo API 호출 함수
@@ -1505,25 +1506,29 @@ else:
     qr_h7 = """SELECT avg(rca.stay_time) as stay_time FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class like 'm%' OR rca.class like 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 """
     qr_h8 = """SELECT AVG(t1.hourly_avg_stay) as stay_time FROM (SELECT rca.collect_hour, AVG(rca.stay_time) AS hourly_avg_stay FROM rt_collect_summary rca WHERE rca.user_id = '{id}' AND rca.work_no = {work_no} and rca.collect_date >= '{start_date_str}' and rca.collect_date <= '{end_date_str}' and rca.collect_hour >= '{start_time_str}' and rca.collect_hour < '{end_time_str}' AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%') AND rca.stay_time <> 99999 AND rca.del_yn = 0 GROUP BY rca.collect_hour) t1;"""
 
+    # --------------------------------------------------------------------------
+    # A. 상단 메트릭 및 등급 산정 영역 (rt_collect_summary 활용)
+    # --------------------------------------------------------------------------
+
     # 1. 통행량 분석용 통합 조회
     qr_all = """
-        SELECT
-            rca.collect_date,
-            rca.collect_hour,
-            rca.collect_cnt,
-            c.anal_gubun
-        FROM rt_collect_summary rca
-        LEFT JOIN rt_calendar c
-            ON rca.collect_date = c.dt
-        WHERE rca.user_id = '{id}'
-          AND rca.work_no = {work_no}
-          AND rca.collect_date >= '{start_date_str}'
-          AND rca.collect_date <= '{end_date_str}'
-          AND rca.collect_hour >= '{start_time_str}'
-          AND rca.collect_hour < '{end_time_str}'
-          AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
-          AND rca.del_yn = 0
-        """
+    SELECT
+        rca.collect_date,
+        rca.collect_hour,
+        rca.collect_cnt,
+        c.anal_gubun
+    FROM rt_collect_summary rca
+    LEFT JOIN rt_calendar c
+        ON rca.collect_date = c.dt
+    WHERE rca.user_id = '{id}'
+      AND rca.work_no = {work_no}
+      AND rca.collect_date >= '{start_date_str}'
+      AND rca.collect_date <= '{end_date_str}'
+      AND rca.collect_hour >= '{start_time_str}'
+      AND rca.collect_hour < '{end_time_str}'
+      AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
+      AND rca.del_yn = 0
+    """
 
     df = conn.query(qr_all.format(**variables1), ttl=0)
 
@@ -1578,20 +1583,20 @@ else:
 
     # 3. 체류시간 평균 및 표준편차: summary 통계 컬럼으로 정확하게 계산
     qr_stay_summary = """
-        SELECT
-            SUM(stay_time_count) AS stay_time_count,
-            SUM(stay_time_sum) AS stay_time_sum,
-            SUM(stay_time_sum_sq) AS stay_time_sum_sq
-        FROM rt_collect_summary
-        WHERE user_id = '{id}'
-          AND work_no = {work_no}
-          AND collect_date >= '{start_date_str}'
-          AND collect_date <= '{end_date_str}'
-          AND collect_hour >= '{start_time_str}'
-          AND collect_hour < '{end_time_str}'
-          AND (class LIKE 'm%' OR class LIKE 'w%')
-          AND del_yn = 0
-        """
+    SELECT
+        SUM(stay_time_count) AS stay_time_count,
+        SUM(stay_time_sum) AS stay_time_sum,
+        SUM(stay_time_sum_sq) AS stay_time_sum_sq
+    FROM rt_collect_summary
+    WHERE user_id = '{id}'
+      AND work_no = {work_no}
+      AND collect_date >= '{start_date_str}'
+      AND collect_date <= '{end_date_str}'
+      AND collect_hour >= '{start_time_str}'
+      AND collect_hour < '{end_time_str}'
+      AND (class LIKE 'm%' OR class LIKE 'w%')
+      AND del_yn = 0
+    """
 
     df_stay_summary = conn.query(
         qr_stay_summary.format(**variables1),
@@ -1615,52 +1620,33 @@ else:
 
             # [h8] 전체 개인 기준 모집단 표준편차
             variance = (stay_sum_sq / stay_count) - (h7_stay ** 2)
-
-            # 부동소수점 계산 오차로 아주 작은 음수가 나오는 경우 방지
             variance = max(float(variance), 0.0)
-
             h8_stay = float(variance ** 0.5)
 
-    # 4. 체류시간 중앙값: 원천데이터에서 개인별 체류시간 조회
-    qr_stay_median = """
-        WITH ranked AS (
-            SELECT
-                rca.stay_time,
-                ROW_NUMBER() OVER (ORDER BY rca.stay_time) AS rn,
-                COUNT(*) OVER () AS cnt
-            FROM rt_collect_all rca
-            WHERE rca.user_id = '{id}'
-              AND rca.work_no = {work_no}
-              AND rca.collect_date >= '{start_date_str}'
-              AND rca.collect_date <= '{end_date_str}'
-              AND rca.collect_hour >= '{start_time_str}'
-              AND rca.collect_hour < '{end_time_str}'
-              AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
-              AND rca.del_yn = 0
-              AND rca.stay_time IS NOT NULL
-              AND rca.stay_time <> 99999
-        )
-        SELECT AVG(stay_time) AS median_stay_time
-        FROM ranked
-        WHERE rn IN (
-            FLOOR((cnt + 1) / 2),
-            FLOOR((cnt + 2) / 2)
-        )
-        """
+    # 4. 체류시간 중앙값: 신규 초 단위 집계 테이블(rt_collect_summary_stay_dist) 활용 (원장 조회 제거)
+    qr_stay_dist_load = """
+    SELECT stay_sec, cnt
+    FROM rt_collect_summary_stay_dist
+    WHERE user_id = '{id}'
+      AND work_no = {work_no}
+      AND collect_date >= '{start_date_str}'
+      AND collect_date <= '{end_date_str}'
+      AND collect_hour >= '{start_time_str}'
+      AND collect_hour < '{end_time_str}'
+      AND (class LIKE 'm%' OR class LIKE 'w%')
+    """
 
-    df_stay_median = conn.query(
-        qr_stay_median.format(**variables1),
+    df_stay_dist = conn.query(
+        qr_stay_dist_load.format(**variables1),
         ttl=0
     )
 
-    if (
-            df_stay_median.empty
-            or pd.isna(df_stay_median.loc[0, "median_stay_time"])
-    ):
+    if df_stay_dist.empty:
         h10_stay = 0.0
     else:
-        # [h10] 개인별 체류시간 중앙값
-        h10_stay = float(df_stay_median.loc[0, "median_stay_time"])
+        # 빈도수(cnt)가 반영된 초 단위 값들을 확장하여 고속 중앙값 연산
+        expanded_seconds = np.repeat(df_stay_dist["stay_sec"], df_stay_dist["cnt"])
+        h10_stay = float(np.median(expanded_seconds)) if len(expanded_seconds) > 0 else 0.0
 
     # 2. 등급 판정 및 색상 설정 로직
     if avg_daily_cnt >= 10000:
@@ -1805,28 +1791,9 @@ else:
       AND rca.stay_time <> 99999
     """
 
-    # [데이터셋 3] 체류시간 분포 파이차트용 개인별 원본 데이터
-    # 요약 테이블이 아닌 rt_collect_all에서 실제 개인별 체류시간 조회
-    qr_stay_distribution = """
-    SELECT 
-        rca.stay_time
-    FROM rt_collect_all rca
-    WHERE rca.user_id = '{id}'
-      AND rca.work_no = {work_no}
-      AND rca.collect_date >= '{start_date_str}'
-      AND rca.collect_date <= '{end_date_str}'
-      AND rca.collect_hour >= '{start_time_str}'
-      AND rca.collect_hour < '{end_time_str}'
-      AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
-      AND rca.del_yn = 0
-      AND rca.stay_time IS NOT NULL
-      AND rca.stay_time <> 99999
-    """
-
-    # 3번 조회
+    # 2번 조회 (기존 원장 조회를 완전히 대체하여 쿼리 횟수 최소화)
     df_base = conn.query(qr_base_all.format(**variables1), ttl=0)
     df_etc = conn.query(qr_base_etc.format(**variables1), ttl=0)
-    df_stay_distribution = conn.query(qr_stay_distribution.format(**variables1), ttl=0)
 
 
     # ------------------------------------------------------------------------------
@@ -1878,64 +1845,38 @@ else:
         ignore_index=True
     )
 
-    # 3. 일자별 평균 체류시간
-    # ------------------------------------------------------------------------------
-    # 3. 일자별 평균 체류시간
-    #    원장데이터(rt_collect_all)의 개인별 체류시간을 직접 조회하여 계산
-    #    ※ rt_collect_summary의 평균 체류시간을 재평균하지 않음
-    # ------------------------------------------------------------------------------
-
+    # 3. 일자별 평균 체류시간 (평균의 평균 오류 방지: 가중 평균 쿼리 적용)
     qr_date_stay = """
-            SELECT
-                rca.collect_date,
-                rca.stay_time
-            FROM rt_collect_all rca
-            WHERE rca.user_id = '{id}'
-              AND rca.work_no = {work_no}
-              AND rca.collect_date >= '{start_date_str}'
-              AND rca.collect_date <= '{end_date_str}'
-              AND rca.collect_hour >= '{start_time_str}'
-              AND rca.collect_hour < '{end_time_str}'
-              AND (rca.class LIKE 'm%' OR rca.class LIKE 'w%')
-              AND rca.del_yn = 0
-              AND rca.stay_time IS NOT NULL
-              AND rca.stay_time <> 99999
-        """
+        SELECT
+            collect_date,
+            SUM(stay_time_sum) / NULLIF(SUM(stay_time_count), 0) AS daily_avg_stay
+        FROM rt_collect_summary
+        WHERE user_id = '{id}'
+          AND work_no = {work_no}
+          AND collect_date >= '{start_date_str}'
+          AND collect_date <= '{end_date_str}'
+          AND collect_hour >= '{start_time_str}'
+          AND collect_hour < '{end_time_str}'
+          AND (class LIKE 'm%' OR class LIKE 'w%')
+          AND del_yn = 0
+        GROUP BY collect_date
+        ORDER BY collect_date
+    """
 
-    # 원장데이터 조회
     df_date_stay_raw = conn.query(
         qr_date_stay.format(**variables1),
         ttl=0
     )
 
-    # 일자별 개인 체류시간 평균 계산
     if not df_date_stay_raw.empty:
-
-        df_date_stay = (
-            df_date_stay_raw
-            .groupby("collect_date")["stay_time"]
-            .mean()
-            .round(1)
-            .reset_index()
-        )
-
-        # 기존 차트에서 사용하는 컬럼명 유지
+        df_date_stay = df_date_stay_raw.copy()
+        df_date_stay["daily_avg_stay"] = df_date_stay["daily_avg_stay"].round(1)
         df_date_stay.columns = ["collect_date", "cnt"]
-
-        # 날짜 형식 변환 (YYYYMMDD → MM/DD)
-        df_date_stay["collect_date"] = (
-            df_date_stay["collect_date"]
-            .apply(format_date_str)
-        )
-
+        df_date_stay["collect_date"] = df_date_stay["collect_date"].apply(format_date_str)
     else:
+        df_date_stay = pd.DataFrame(columns=["collect_date", "cnt"])
 
-        df_date_stay = pd.DataFrame(
-            columns=["collect_date", "cnt"]
-        )
-
-    # 4. 체류시간 분포 파이차트용 데이터 가공
-    # 개인별 원본 데이터의 실제 행 개수를 기준으로 집계
+    # 4. 체류시간 분포 파이차트용 데이터 가공 (rt_collect_summary_stay_dist 활용)
     bins = [-1, 5, 10, 60, 600, float("inf")]
     labels = [
         "5초 미만",
@@ -1945,26 +1886,21 @@ else:
         "10분 이상"
     ]
 
-    if not df_stay_distribution.empty:
-
-        df_stay_distribution["stay_bin"] = pd.cut(
-            df_stay_distribution["stay_time"],
+    if not df_stay_dist.empty:
+        df_stay_dist["stay_bin"] = pd.cut(
+            df_stay_dist["stay_sec"],
             bins=bins,
             labels=labels,
             right=False
         )
-
         df_stay_pie = (
-            df_stay_distribution
-            .groupby("stay_bin", observed=False)
-            .size()
-            .reset_index(name="cnt")
+            df_stay_dist
+            .groupby("stay_bin", observed=False)["cnt"]
+            .sum()
+            .reset_index()
         )
-
         df_stay_pie.columns = ["stay_range", "cnt"]
-
     else:
-        # 데이터가 없더라도 파이차트 구간은 유지
         df_stay_pie = pd.DataFrame({
             "stay_range": labels,
             "cnt": [0, 0, 0, 0, 0]
@@ -2221,7 +2157,7 @@ else:
                       "df": df_dir_hour, "index_col": "collect_hour", "columns_col": "direction", "values_col": "cnt",
                       "y_name": "통행량", "chart_height": 400}
 
-    chart_pictorial = {"chart_id": "pictorial_features", "title": "기타 객체 통행량 분석", "type": "echarts_icon_bar",
+    chart_pictorial = {"chart_id": "pictorial_features", "title": "기 기타 객체 통행량 분석", "type": "echarts_icon_bar",
                        "df": df_etc_pie, "name_col": "class", "value_col": "cnt", "chart_height": 350}
     chart_etc_hour = {"chart_id": "etc_hour", "title": "기타 객체(시간대) 평균 통행량", "type": "echarts_multi_line",
                       "df": df_etc_hour, "index_col": "collect_hour", "columns_col": "class", "values_col": "cnt",
