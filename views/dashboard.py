@@ -13,15 +13,18 @@ import requests
 import os
 from streamlit_echarts import JsCode
 import numpy as np
+import sys
 
 
 # 1. Playwright 크롬 브라우저 자동 설치 체크 함수
 @st.cache_resource
 def install_report_viewer():
     try:
-        subprocess.run(["playwright", "install", "chromium"], check=True)
+        # 현재 가상환경의 pip 또는 파이썬 인터프리터 경로 활용
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"], check=True)
     except Exception as e:
-        st.error(f"Playwright 브라우저 설치 실패: {e}")
+        # 이미 설치되어 있거나 권한 문제로 실패해도 앱이 죽지 않도록 경고만 출력
+        st.warning(f"⚠️ Playwright 브라우저 자동 설치 건너뜀 (서버 사전 설치 환경): {e}")
 
 
 # 앱 실행 시 1회 자동 설치
