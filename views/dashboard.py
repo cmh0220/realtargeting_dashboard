@@ -54,8 +54,8 @@ def get_pdf_bytes(user_id: str, work_no: str):
 
             target_url = f"{clean_base}/dashboard_pdf?export_mode=true&user_id={user_id}&work_no={work_no}"
 
-            page.goto(target_url, wait_until='domcontentloaded', timeout=60000)
-            page.wait_for_timeout(5000)
+            page.goto(target_url, wait_until='domcontentloaded', timeout=90000)
+            page.wait_for_timeout(10000)
 
             pdf_bytes = page.pdf(
                 format='A4',
