@@ -70,9 +70,6 @@ def get_collect_info_list(user_id: str):
                     latitude as '위도',
                     longitude as '경도'                    
                 FROM rt_collect_info
-                WHERE  view_yn = 1
-                AND view_start_date <= CURDATE()
-                AND view_end_date >= CURDATE() 
                 ORDER BY work_no DESC                
             """)
             params = {}

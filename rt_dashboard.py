@@ -69,7 +69,9 @@ admin_device_page = st.Page(
 # 일일점검 페이지 추가
 admin_check_page = st.Page(
     "views/admin_check.py",
-    title="   일일점검 체크",
+    url_path="admin_check",
+    visibility="hidden",
+    title="   일일점검 체크"
 )
 
 # 로그인 실패 페이지
@@ -111,12 +113,12 @@ dashboard_page = st.Page(
 # Multi-Page Navigation (동적 메뉴 구성)
 # ===================================================================
 home_pages = [main_page, guide_page]
-
+home_pages.append(admin_check_page)
 # 로그인한 user_id가 "notreal"인 경우 관리자 메뉴들 추가
 if st.session_state.get("user_id") == "notreal":
     home_pages.append(admin_page)
     home_pages.append(admin_device_page)
-    home_pages.append(admin_check_page)
+
 
 pages = {
     "🏠홈": home_pages,
