@@ -28,7 +28,7 @@ check_sql = """
               OR (i.start_date > a.collect_date)
               OR (i.end_date < a.collect_date)
               OR (i.start_time <> MIN(a.collect_hour))
-              OR (HOUR(NOW()) - CAST(MAX(a.collect_hour) AS UNSIGNED) > 1)
+              OR (HOUR(NOW()) - CAST(MAX(a.collect_hour) AS SIGNED) > 1)
             THEN '점검'
             ELSE '정상'
         END AS '상태',
@@ -42,7 +42,7 @@ check_sql = """
                 CASE WHEN i.start_date > a.collect_date THEN '시작일 이전 수집' END,
                 CASE WHEN i.end_date < a.collect_date THEN '종료일 이후 수집' END,
                 CASE WHEN i.start_time <> MIN(a.collect_hour) THEN '시작시간 불일치' END,
-                CASE WHEN HOUR(NOW()) - CAST(MAX(a.collect_hour) AS UNSIGNED) > 1 THEN '1시간 이상 수집지연' END
+                CASE WHEN HOUR(NOW()) - CAST(MAX(a.collect_hour) AS SIGNED) > 1 THEN '1시간 이상 수집지연' END
             ), '')
         END AS '내용',
 
