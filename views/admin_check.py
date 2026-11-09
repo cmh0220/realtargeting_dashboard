@@ -1,12 +1,4 @@
 import streamlit as st
-from sqlalchemy import text
-
-# ===================================================================
-# 권한 체크 (notreal 계정만 접근 가능)
-# ===================================================================
-if st.session_state.get("user_id") != "notreal":
-    st.error("⚠️ 접근 권한이 없습니다. 관리자(notreal) 계정으로 로그인해 주세요.")
-    st.stop()
 
 st.title("📋 일일점검 현황")
 st.markdown("오늘 날짜 기준 수집 데이터 상태를 실시간으로 점검합니다.")
