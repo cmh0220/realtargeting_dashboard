@@ -93,10 +93,10 @@ try:
         abnormal_cnt = len(df_check[df_check["상태"] == "점검"])
         normal_cnt = total_cnt - abnormal_cnt
 
-        m1, m2, m3 = st.columns(3)
-        m1.metric("총 점검 대상", f"{total_cnt}건")
-        m2.metric("정상", f"{normal_cnt}건", delta=None)
-        m3.metric("점검 필요", f"{abnormal_cnt}건", delta=f"-{abnormal_cnt}" if abnormal_cnt > 0 else "0", delta_color="inverse")
+        # m1, m2, m3 = st.columns(3)
+        # m1.metric("총 점검 대상", f"{total_cnt}건")
+        # m2.metric("정상", f"{normal_cnt}건", delta=None)
+        # m3.metric("점검 필요", f"{abnormal_cnt}건", delta=f"-{abnormal_cnt}" if abnormal_cnt > 0 else "0", delta_color="inverse")
 
         st.markdown("---")
 
